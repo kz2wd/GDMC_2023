@@ -50,36 +50,40 @@ def build_tower(editor: Editor, tower_center, tower_width, tower_height):
 
 
 def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, castle_size=None, tower_amount=None,
-                 tower_height=None, tower_width=None, wall_height=None, wall_radius=None):
+                 tower_height_fun=None, tower_width=None, wall_height_fun=None, wall_radius=None):
     if castle_size is None:
-        castle_size = random.randint(10, 30)
+        castle_size = random.randint(5, 75)
     if tower_amount is None:
-        tower_amount = random.randint(3, int(castle_size / 3))
-    if tower_height is None:
-        tower_height = random.randint(5, 30)
+        tower_amount = random.randint(3, int((castle_size / 15) ** 2 ) + 3)
+    if tower_height_fun is None:
+        tower_height_fun = lambda: random.randint(int(1 + 50 / ((castle_size / 10) ** 2 )), min(int(20 + 200 / ((castle_size / 10) ** 2 )), 200))
     if tower_width is None:
-        tower_width = random.randint(2, int(castle_size / 3))
-    if wall_height is None:
-        wall_height = random.randint(int(tower_height / 2), tower_height - 2)
+        tower_width = random.randint(3, int(80 / (castle_size / 10) / tower_amount + 8))
+    if wall_height_fun is None:
+        wall_height_fun = lambda t_height: random.randint(int(t_height / 2), t_height - 2)
     if wall_radius is None:
         wall_radius = random.randint(1, tower_width - 2)
 
     circle = list(circle_around(castle_center, castle_size, tower_amount))
 
+    tower_heights = []
     # Place towers
     for x, z in circle:
         if not editor.getBuildArea().contains((x, 0, z)):
             continue
         base_coord = coord2d_to_ground_coord(x, z)
-        build_tower(editor, base_coord, tower_width, tower_height)
+        tower_heights.append(tower_height_fun())
+        print("Tower height :", tower_heights[-1])
+        build_tower(editor, base_coord, tower_width, tower_heights[-1])
 
+    wall_height = wall_height_fun(min(tower_heights) + 5)
     # Place walls
     for (x1, z1), (x2, z2) in zip(circle, circle[1:] + [circle[0]]):
         if not (editor.getBuildArea().contains((x1, 0, z1)) and editor.getBuildArea().contains((x2, 0, z2))):
             continue
         coord1 = coord2d_to_ground_coord(x1, z1)
         coord2 = coord2d_to_ground_coord(x2, z2)
-        tower_shift = coord_scalar_mul(get_normalized_direction(coord2, coord1), tower_width / 2)
+        # tower_shift = coord_scalar_mul(get_normalized_direction(coord2, coord1), tower_width / 2)
 
         wall_shift_functions = lambda shift: lambda vector: shift_on_side(vector, shift)
         for shift_function in map(wall_shift_functions, [wall_radius, -wall_radius]):
@@ -91,4 +95,4 @@ def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, castle_
 
             for coord in geometry.line3D(shifted_coord1, shifted_coord2):
                 for i in range(wall_height):
-                    editor.placeBlock(increase_y(coord, i), Block("gold_block"))
+                    editor.placeBlock(increase_y(coord, i), Block("andesite"))

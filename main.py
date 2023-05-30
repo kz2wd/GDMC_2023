@@ -15,6 +15,7 @@ import pstats
 import numpy as np
 
 from castle_geo import placeGradientBox, placeGradient, build_castle
+from utils import shift_on_side, coord_normalize
 
 
 class CoordExplore:
@@ -200,9 +201,10 @@ def main():
     flatness_score = oppose_values(normalize_2d_array_sum(variance_map, 1)) * flatness_factor
     occupation_score = np.ones(flatness_score.shape)
 
-    castle_amount = 1
+    castle_amount = 25
     for i in range(castle_amount):
-        best_score = height_score * centerness_score * flatness_score * occupation_score
+        # best_score = height_score * centerness_score * flatness_score * occupation_score
+        best_score = height_score + centerness_score + flatness_score
         best_indices = get_highest_index_2d(best_score)
         print(f"Best pos at {best_indices} with value {best_score[best_indices]}.")
 
@@ -215,7 +217,7 @@ def main():
         if not best_coord:
             break
 
-        build_castle(editor, best_coord, coord2d_to_ground_coord, tower_width=10, wall_radius=4)
+        build_castle(editor, best_coord, coord2d_to_ground_coord)
 
     # place_debug_hmap(normalize_2d_array_sum(height_score * centerness_score * flatness_score, palette_size + 1))
 
