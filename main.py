@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 from typing import List, Any, Sequence
 
 import gdpc
@@ -13,7 +14,7 @@ import pstats
 
 import numpy as np
 
-from castle_geo import placeGradientBox, placeGradient
+from castle_geo import placeGradientBox, placeGradient, build_castle
 
 
 class CoordExplore:
@@ -127,6 +128,7 @@ def oppose_values(array2d: np.array):
 
 
 def main():
+
     colors = "white, orange, magenta, light_blue, yellow, lime, pink, gray, light_gray, cyan, purple, blue, brown, " \
              "green, red, black".split(", ")
 
@@ -156,6 +158,9 @@ def main():
     def coord_relative_to_absolute(x, z):
         return x + build_area.begin.x, z + build_area.begin.z
 
+    def coord_absolute_to_relative(x, z):
+        return x - build_area.begin.x, z - build_area.begin.z
+
     def get_associated_block(value):
         index = int(value)
         if index > palette_size - 1:
@@ -180,6 +185,9 @@ def main():
             coords = [coords]
         return filter(lambda coord: build_area.contains(coord.to_3d(0)), coords)
 
+    def coord2d_to_ground_coord(x, z):
+        return tuple(map(int, (x, hmap[tuple(map(int, coord_absolute_to_relative(x, z)))], z)))
+
     exclusion_radius = 0
     indices_urban_radius = 2 * math.ceil(urban_area_radius / sampling) + exclusion_radius
 
@@ -192,14 +200,11 @@ def main():
     flatness_score = oppose_values(normalize_2d_array_sum(variance_map, 1)) * flatness_factor
     occupation_score = np.ones(flatness_score.shape)
 
-    for block in ["emerald_block", "diamond_block", "gold_block", "iron_block", "copper_block", "cobblestone", "diorite", "granite", "pumpkin", "melon", "mycelium"]:
-
+    castle_amount = 5
+    for i in range(castle_amount):
         best_score = height_score * centerness_score * flatness_score * occupation_score
         best_indices = get_highest_index_2d(best_score)
         print(f"Best pos at {best_indices} with value {best_score[best_indices]}.")
-
-        if not best_score[best_indices].all():
-            break
 
         occupation_score[
         max(0, best_indices[0] - indices_urban_radius): min(occupation_score.shape[0], best_indices[0] + indices_urban_radius),
@@ -207,10 +212,10 @@ def main():
                                                          best_indices[1] + indices_urban_radius)] = 0
 
         best_coord = coord_relative_to_absolute(*coord_converter(*best_indices))
-        urban_area = blob_expand(editor, best_coord, max_rel_diff=1, max_distance=urban_area_radius)
-        urban_ground = list(map(lambda coord: coord2d_to_3d_surface(coord, (0, -1, 0)), urban_area))
-        for coord in urban_ground:
-            editor.placeBlock(coord, Block(block))
+        if not best_coord:
+            break
+
+        build_castle(editor, best_coord, coord2d_to_ground_coord)
 
     # place_debug_hmap(normalize_2d_array_sum(height_score * centerness_score * flatness_score, palette_size + 1))
 
@@ -230,8 +235,8 @@ def main():
 
 
 if __name__ == '__main__':
-    # main()
-    # exit(0)
+    main()
+    exit(0)
 
     with cProfile.Profile() as pr:
         main()
