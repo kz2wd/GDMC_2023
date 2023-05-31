@@ -6,8 +6,8 @@ from typing import List, Any, Sequence
 
 import gdpc
 from gdpc import Editor, Block, geometry, Box
-from gdpc.vector_tools import distance, X, Z
-from glm import ivec3
+from gdpc.vector_tools import distance, X, Z, circle, ellipse
+from glm import ivec3, ivec2
 
 import cProfile
 import pstats
@@ -201,10 +201,9 @@ def main():
     flatness_score = oppose_values(normalize_2d_array_sum(variance_map, 1)) * flatness_factor
     occupation_score = np.ones(flatness_score.shape)
 
-    castle_amount = 25
+    castle_amount = 3
     for i in range(castle_amount):
-        # best_score = height_score * centerness_score * flatness_score * occupation_score
-        best_score = height_score + centerness_score + flatness_score
+        best_score = height_score * centerness_score * flatness_score * occupation_score
         best_indices = get_highest_index_2d(best_score)
         print(f"Best pos at {best_indices} with value {best_score[best_indices]}.")
 
@@ -237,6 +236,8 @@ def main():
 
 
 if __name__ == '__main__':
+
+
     main()
     exit(0)
 
