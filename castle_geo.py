@@ -9,7 +9,11 @@ from gdpc.vector_tools import l1Norm
 from glm import ivec3
 
 from utils import circle_around, increase_y, get_normalized_direction, coord_scalar_mul, coords_add, \
-    perpendicular_vector, shift_on_side
+    perpendicular_vector, shift_on_side, coords_sub, get_norm, with_y
+
+
+def gradiantPlacer(editor, block_pattern: list[Block]):
+    return lambda iterator: placeGradient(editor, block_list := list(iterator), min(y_coords := list(map(lambda b: b[1], block_list))), len(set(y_coords)), block_pattern)
 
 
 def placeGradient(editor: Editor, iterator, comp, size, blocks: list[Block]):
@@ -33,23 +37,28 @@ def placeGradientBox(editor: Editor, box: Box, blocks: list[Block]) -> None:
     placeGradient(editor, box.shell, box.begin[1], box.size[1], blocks)
 
 
-def build_roof(editor: Editor, center, shape_function, widths, block):
+def roof_blocks(center, shape_function, widths):
     for i, width in enumerate(widths):
         for coord in shape_function(increase_y(center, i), width):
-            editor.placeBlock(coord, block)
+            yield coord
 
 
-def build_tower(editor: Editor, tower_center, tower_width, tower_height):
-    geometry.placeCylinder(editor, tower_center, tower_width, tower_height, Block("stone_bricks"), hollow=True)
+def build_tower(tower_center, tower_width, tower_height, wall_function, roof_function):
+    wall_function(geometry.cylinder(tower_center, tower_width, tower_height, hollow=True))
 
-    def roof_function(coord, width):
-        return list(geometry.cylinder(coord, width, 1))
+    def roof_shape(coord, width):
+        return list(geometry.cylinder(coord, width, 1, hollow=True))
 
-    build_roof(editor, increase_y(tower_center, tower_height), roof_function,
-               list(map(int, np.linspace(tower_width + 1, 3, (tower_width + 1) * 2))), Block("oak_planks"))
+    def odd_width_generator(start_width, end=3, repeat=1):
+        for i in range(start_width, end, -2):
+            for _ in range(repeat):
+                yield i
+
+    roof_coords = list(roof_blocks(increase_y(tower_center, tower_height), roof_shape, list(odd_width_generator(tower_width + 2, repeat=3))))
+    roof_function(roof_coords)
 
 
-def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, castle_size=None, tower_ring_amount=None):
+def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, wall_placer_fct, roof_placer_fct, rampart_placer_fct, castle_size=None, tower_ring_amount=None):
     if castle_size is None:
         castle_size = random.randint(30, 75)
     if tower_ring_amount is None:
@@ -67,15 +76,15 @@ def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, castle_
     center_tower_height = lambda: random.randint(40, 70)
     # Center tower
     build_tower_ring(False, castle_center, [1, 10, 10][center_tower_amount - 1], coord2d_to_ground_coord, editor, center_tower_amount,
-                     center_tower_height, center_tower_width, wall_height_fun, wall_radius)
+                     center_tower_height, center_tower_width, wall_height_fun, wall_radius, wall_placer_fct, roof_placer_fct, rampart_placer_fct)
 
     for i in range(tower_ring_amount):
         build_tower_ring(random.random() > .5, castle_center, (i + 1) * (castle_size / tower_ring_amount), coord2d_to_ground_coord, editor, tower_amount_fun(),
-                         tower_height_fun, tower_width, wall_height_fun, wall_radius)
+                         tower_height_fun, tower_width, wall_height_fun, wall_radius, wall_placer_fct, roof_placer_fct, rampart_placer_fct)
 
 
 def build_tower_ring(build_ramparts, ring_center, ring_size, coord2d_to_ground_coord, editor, tower_amount,
-                     tower_height_fun, tower_width, wall_height_fun, wall_radius):
+                     tower_height_fun, tower_width, wall_height_fun, wall_radius, wall_placer_fct, roof_placer_fct, rampart_placer_fct):
     circle = list(circle_around(ring_center, ring_size, tower_amount))
     tower_heights = []
     # Place towers
@@ -84,8 +93,8 @@ def build_tower_ring(build_ramparts, ring_center, ring_size, coord2d_to_ground_c
             continue
         base_coord = coord2d_to_ground_coord(x, z)
         tower_heights.append(tower_height_fun())
-        build_tower(editor, base_coord, tower_width, tower_heights[-1])
-    if build_ramparts:
+        build_tower(base_coord, tower_width, tower_heights[-1], wall_placer_fct, roof_placer_fct)
+    if build_ramparts and tower_heights:
         wall_height = wall_height_fun(min(tower_heights) + 5)
         # Place walls
         for (x1, z1), (x2, z2) in zip(circle, circle[1:] + [circle[0]]):
@@ -97,12 +106,16 @@ def build_tower_ring(build_ramparts, ring_center, ring_size, coord2d_to_ground_c
 
             wall_shift_functions = lambda shift: lambda vector: shift_on_side(vector, shift)
             for shift_function in map(wall_shift_functions, [wall_radius, -wall_radius]):
-                shifted_coord1 = shift_function(coord1)
-                shifted_coord2 = shift_function(coord2)
+                shift_vector = with_y(shift_function(coords_sub(coord1, coord2)), 0)
+                shifted_coord1 = coords_add(coord1, shift_vector)
+                shifted_coord2 = coords_add(coord2, shift_vector)
 
                 # start_coord1 = coords_add(coord1, tower_shift)
                 # end_coord2 = coords_add(coord2, coord_scalar_mul(tower_shift, -1))
+                rampart_blocks = [increase_y(coord, i) for i in range(wall_height) for coord in
+                                  geometry.line3D(shifted_coord1, shifted_coord2)]
+                rampart_placer_fct(rampart_blocks)
 
-                for coord in geometry.line3D(shifted_coord1, shifted_coord2):
-                    for i in range(wall_height):
-                        editor.placeBlock(increase_y(coord, i), Block("andesite"))
+
+
+

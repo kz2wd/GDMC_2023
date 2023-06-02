@@ -14,7 +14,7 @@ import pstats
 
 import numpy as np
 
-from castle_geo import placeGradientBox, placeGradient, build_castle
+from castle_geo import placeGradientBox, placeGradient, build_castle, gradiantPlacer, build_tower_ring
 from utils import shift_on_side, coord_normalize
 
 
@@ -138,9 +138,23 @@ def main():
                       Block("tuff"), Block("dead_bubble_coral_block"),
                       Block("andesite"), Block("diorite"), Block("calcite")]
 
+    planks = [Block(wood_type + "_planks") for wood_type in ["dark_oak", "spruce", "oak", "birch"]]
+
     editor = Editor(buffering=True, bufferLimit=64000)
 
-    # placeGradientBox(editor, Box((40, 80, 60), (10, 10, 1)), stone_gradient)
+    # placeGradientBox(editor, Box((30, 70, 50), (10, 10, 1)), stone_gradient)
+
+    stone_gradiant_placer = gradiantPlacer(editor, stone_gradient)
+    planks_gradiant_placer = gradiantPlacer(editor, planks[::-1])
+
+    def get_rampart_function():
+        return gradiantPlacer(editor, [Block(name) for name in random.choice(
+            [["diorite", "calcite", "polished_diorite"],
+             ["polished_andesite", "andesite", "polished_andesite"],
+             ["cobbled_deepslate", "polished_deepslate"],
+             ["deepslate_bricks", "cracked_deepslate_bricks", "deepslate_bricks", "cracked_deepslate_bricks",
+              "deepslate_bricks", "cracked_deepslate_bricks", "deepslate_bricks", "cracked_deepslate_bricks"],
+             ["polished_blackstone", "blackstone", "polished_blackstone"]])])
 
     build_area = editor.getBuildArea()
 
@@ -216,7 +230,7 @@ def main():
         if not best_coord:
             break
 
-        build_castle(editor, best_coord, coord2d_to_ground_coord)
+        build_castle(editor, best_coord, coord2d_to_ground_coord, stone_gradiant_placer, planks_gradiant_placer, get_rampart_function())
 
     # place_debug_hmap(normalize_2d_array_sum(height_score * centerness_score * flatness_score, palette_size + 1))
 

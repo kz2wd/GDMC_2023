@@ -14,6 +14,10 @@ def increase_y(coord, increase):
     return coord[0], coord[1] + increase, coord[2]
 
 
+def with_y(coord, y):
+    return coord[0], y, coord[2]
+
+
 def get_norm(coord):
     return math.sqrt(sum(map(lambda x: x*x, coord)))
 
@@ -57,5 +61,4 @@ def perpendicular_vector(vector):
 
 
 def shift_on_side(vector, shift_length):
-    perpendicular_shift = coord_scalar_mul(coord_normalize(perpendicular_vector(vector)), shift_length)
-    return coords_add(vector, perpendicular_shift)
+    return coord_scalar_mul(coord_normalize(perpendicular_vector(vector)), shift_length)
