@@ -6,6 +6,8 @@ from typing import List, Any, Sequence
 
 import gdpc
 from gdpc import Editor, Block, geometry, Box
+from gdpc.block import transformedBlockOrPalette
+from gdpc.geometry import placeLine
 from gdpc.vector_tools import distance, X, Z, circle, ellipse
 from glm import ivec3, ivec2
 
@@ -250,8 +252,6 @@ def main():
 
 
 if __name__ == '__main__':
-
-
     main()
     exit(0)
 

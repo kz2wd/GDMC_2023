@@ -46,6 +46,10 @@ def coords_add(coord1, coord2):
     return coords_operation(coord1, coord2)(add)
 
 
+def coord_int(coord):
+    return tuple(map(int, coord))
+
+
 def get_normalized_direction(coord1, coord2):
     direction = coords_sub(coord1, coord2)
     return coord_normalize(direction)

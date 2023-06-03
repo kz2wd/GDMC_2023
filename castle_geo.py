@@ -9,7 +9,7 @@ from gdpc.vector_tools import l1Norm
 from glm import ivec3
 
 from utils import circle_around, increase_y, get_normalized_direction, coord_scalar_mul, coords_add, \
-    perpendicular_vector, shift_on_side, coords_sub, get_norm, with_y
+    perpendicular_vector, shift_on_side, coords_sub, get_norm, with_y, coord_int
 
 
 def gradiantPlacer(editor, block_pattern: list[Block]):
@@ -64,27 +64,27 @@ def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, wall_pl
     if tower_ring_amount is None:
         tower_ring_amount = random.randint(1, int(castle_size / 10))
 
-    tower_amount_fun = lambda: random.randint(3, int((castle_size / 15) ** 2) + 3)
+    tower_amount_fun = lambda: random.randint(4, int((castle_size / 15) ** 2) + 3)
 
     tower_height_fun = lambda: random.randint(int(5 + 50 / ((castle_size / 10) ** 2 )), min(int(20 + 200 / ((castle_size / 10) ** 2 )), 200))
     tower_width = random.randint(3, int(40 / (castle_size / 10) + 4))
     wall_height_fun = lambda t_height: random.randint(int(t_height / 2), t_height - 2)
-    wall_radius = random.randint(1, tower_width - 2)
+    wall_width = random.randint(2, tower_width - 2)
 
     center_tower_amount = random.randint(1, 3)
     center_tower_width = random.randint(10, 20)
     center_tower_height = lambda: random.randint(40, 70)
     # Center tower
     build_tower_ring(False, castle_center, [1, 10, 10][center_tower_amount - 1], coord2d_to_ground_coord, editor, center_tower_amount,
-                     center_tower_height, center_tower_width, wall_height_fun, wall_radius, wall_placer_fct, roof_placer_fct, rampart_placer_fct)
+                     center_tower_height, center_tower_width, wall_height_fun, wall_width, wall_placer_fct, roof_placer_fct, rampart_placer_fct)
 
     for i in range(tower_ring_amount):
-        build_tower_ring(random.random() > .5, castle_center, (i + 1) * (castle_size / tower_ring_amount), coord2d_to_ground_coord, editor, tower_amount_fun(),
-                         tower_height_fun, tower_width, wall_height_fun, wall_radius, wall_placer_fct, roof_placer_fct, rampart_placer_fct)
+        build_tower_ring(True, castle_center, (i + 1) * (castle_size / tower_ring_amount), coord2d_to_ground_coord, editor, tower_amount_fun(),
+                         tower_height_fun, tower_width, wall_height_fun, wall_width, wall_placer_fct, roof_placer_fct, rampart_placer_fct)
 
 
 def build_tower_ring(build_ramparts, ring_center, ring_size, coord2d_to_ground_coord, editor, tower_amount,
-                     tower_height_fun, tower_width, wall_height_fun, wall_radius, wall_placer_fct, roof_placer_fct, rampart_placer_fct):
+                     tower_height_fun, tower_width, wall_height_fun, wall_width, wall_placer_fct, roof_placer_fct, rampart_placer_fct):
     circle = list(circle_around(ring_center, ring_size, tower_amount))
     tower_heights = []
     # Place towers
@@ -104,17 +104,21 @@ def build_tower_ring(build_ramparts, ring_center, ring_size, coord2d_to_ground_c
             coord2 = coord2d_to_ground_coord(x2, z2)
             # tower_shift = coord_scalar_mul(get_normalized_direction(coord2, coord1), tower_width / 2)
 
-            wall_shift_functions = lambda shift: lambda vector: shift_on_side(vector, shift)
-            for shift_function in map(wall_shift_functions, [wall_radius, -wall_radius]):
-                shift_vector = with_y(shift_function(coords_sub(coord1, coord2)), 0)
-                shifted_coord1 = coords_add(coord1, shift_vector)
-                shifted_coord2 = coords_add(coord2, shift_vector)
+            rampart_blocks = [increase_y(coord, i) for i in range(wall_height) for coord in
+                              geometry.line3D(coord_int(coord1), coord_int(coord2), width=wall_width)]
+            rampart_placer_fct(rampart_blocks)
 
-                # start_coord1 = coords_add(coord1, tower_shift)
-                # end_coord2 = coords_add(coord2, coord_scalar_mul(tower_shift, -1))
-                rampart_blocks = [increase_y(coord, i) for i in range(wall_height) for coord in
-                                  geometry.line3D(shifted_coord1, shifted_coord2)]
-                rampart_placer_fct(rampart_blocks)
+            # wall_shift_functions = lambda shift: lambda vector: shift_on_side(vector, shift)
+            # for shift_function in map(wall_shift_functions, [wall_radius, -wall_radius]):
+            #     shift_vector = with_y(shift_function(coords_sub(coord1, coord2)), 0)
+            #     shifted_coord1 = coords_add(coord1, shift_vector)
+            #     shifted_coord2 = coords_add(coord2, shift_vector)
+            #
+            #     # start_coord1 = coords_add(coord1, tower_shift)
+            #     # end_coord2 = coords_add(coord2, coord_scalar_mul(tower_shift, -1))
+            #     rampart_blocks = [increase_y(coord, i) for i in range(wall_height) for coord in
+            #                       geometry.line3D(coord_int(shifted_coord1), coord_int(shifted_coord2))]
+            #     rampart_placer_fct(rampart_blocks)
 
 
 
