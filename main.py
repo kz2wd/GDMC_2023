@@ -16,6 +16,7 @@ import pstats
 
 import numpy as np
 
+from PlacementMap import PlacementMap, NoValidPositionException
 from castle_geo import placeGradientBox, placeGradient, build_castle, gradiantPlacer, build_tower_ring
 from utils import shift_on_side, coord_normalize
 
@@ -85,51 +86,6 @@ def blob_expand(editor, start: tuple[int, int], max_rel_diff=1, max_abs_diff=5, 
     return blob
 
 
-def sample_array2d(array2d, sampling):
-    return array2d[::sampling, ::sampling]
-
-
-def generate_decay_matrix(size):
-    center = (size - 1) / 2
-    x, y = np.indices((size, size))
-    distance = np.sqrt((x - center) ** 2 + (y - center) ** 2)
-    normalized_values = (np.max(distance) - distance) / np.max(distance)
-    return normalized_values
-
-
-def compute_variance_map(hmap: np.ndarray, sampling=5, blur_size=3):
-    variance_map = np.array([[np.nanvar(hmap[max(i - blur_size, 0): min(i + blur_size, hmap.shape[0]),
-                                        max(j - blur_size, 0): min(j + blur_size, hmap.shape[1])].flatten()) for
-                              j in range(0, hmap.shape[1], sampling)] for i in range(0, hmap.shape[0], sampling)])
-
-    def conversion_function(i, j):
-        return i * sampling, j * sampling
-
-    return variance_map, conversion_function
-
-
-def get_lowest_indices_1d(array, k):
-    return array.argpartition(k)[:k]
-
-
-def get_lowest_indices_2d(array2d, k) -> np.array:
-    return np.column_stack(np.unravel_index(array2d.flatten().argpartition(k)[:k], array2d.shape))
-
-
-def get_highest_index_2d(array2d: np.array) -> np.array:
-    return np.unravel_index(array2d.argmax(), array2d.shape)
-
-
-def normalize_2d_array_sum(array, max_val):
-    row_sums = array.max(axis=1)
-    return (array / row_sums[:, np.newaxis]) * max_val
-
-
-def oppose_values(array2d: np.array):
-    max_val = array2d.max()
-    return - array2d + max_val
-
-
 def main():
 
     colors = "white, orange, magenta, light_blue, yellow, lime, pink, gray, light_gray, cyan, purple, blue, brown, " \
@@ -160,23 +116,8 @@ def main():
 
     build_area = editor.getBuildArea()
 
-    editor.loadWorldSlice(heightmapTypes=["WORLD_SURFACE"], cache=True)
-
-    hmap = editor.worldSlice.heightmaps["WORLD_SURFACE"]
-    sampling = 10
-    urban_area_radius = 40
-    variance_map, coord_converter = compute_variance_map(hmap, sampling=sampling, blur_size=urban_area_radius)
-
     debug_palette = [Block(color + "_stained_glass") for color in ["lime", "yellow", "red", "purple", "black"]][::-1]
     palette_size = len(debug_palette)
-
-    normalized_variance_debug = normalize_2d_array_sum(variance_map, palette_size + 1)
-
-    def coord_relative_to_absolute(x, z):
-        return x + build_area.begin.x, z + build_area.begin.z
-
-    def coord_absolute_to_relative(x, z):
-        return x - build_area.begin.x, z - build_area.begin.z
 
     def get_associated_block(value):
         index = int(value)
@@ -184,12 +125,12 @@ def main():
             return debug_palette[palette_size - 1]
         return debug_palette[index]
 
-    def place_debug_hmap(score_map):
-        for i in range(score_map.shape[0]):
-            for j in range(score_map.shape[1]):
-                x_rel, z_rel = coord_converter(i, j)
-                x_abs, z_abs = coord_relative_to_absolute(x_rel, z_rel)
-                editor.placeBlock((x_abs, hmap[x_rel, z_rel] - 1, z_abs), get_associated_block(score_map[i, j]))
+    # def place_debug_hmap(score_map):
+    #     for i in range(score_map.shape[0]):
+    #         for j in range(score_map.shape[1]):
+    #             x_rel, z_rel = coord_converter(i, j)
+    #             x_abs, z_abs = coord_relative_to_absolute(x_rel, z_rel)
+    #             editor.placeBlock((x_abs, hmap[x_rel, z_rel] - 1, z_abs), get_associated_block(score_map[i, j]))
 
     def coord2d_to_3d_surface(coord: CoordExplore, shift: tuple[int, int, int] = None):
         if shift is None:
@@ -202,37 +143,22 @@ def main():
             coords = [coords]
         return filter(lambda coord: build_area.contains(coord.to_3d(0)), coords)
 
-    def coord2d_to_ground_coord(x, z):
-        return tuple(map(int, (x, hmap[tuple(map(int, coord_absolute_to_relative(x, z)))], z)))
-
-    exclusion_radius = 0
-    indices_urban_radius = 2 * math.ceil(urban_area_radius / sampling) + exclusion_radius
-
-    flatness_factor = 3
-    high_factor = 2
-    centerness_factor = 1
-
-    height_score = normalize_2d_array_sum(sample_array2d(hmap, sampling) * high_factor, 1)
-    centerness_score = generate_decay_matrix(height_score.shape[0]) * centerness_factor
-    flatness_score = oppose_values(normalize_2d_array_sum(variance_map, 1)) * flatness_factor
-    occupation_score = np.ones(flatness_score.shape)
+    placement_map = PlacementMap(editor)
 
     castle_amount = 3
     for i in range(castle_amount):
-        best_score = height_score * centerness_score * flatness_score * occupation_score
-        best_indices = get_highest_index_2d(best_score)
-        print(f"Best pos at {best_indices} with value {best_score[best_indices]}.")
-
-        occupation_score[
-        max(0, best_indices[0] - indices_urban_radius): min(occupation_score.shape[0], best_indices[0] + indices_urban_radius),
-        max(0, best_indices[1] - indices_urban_radius): min(occupation_score.shape[1],
-                                                         best_indices[1] + indices_urban_radius)] = 0
-
-        best_coord = coord_relative_to_absolute(*coord_converter(*best_indices))
-        if not best_coord:
+        castle_radius = random.randint(40, 60)
+        print(f"Castle size : {castle_radius}")
+        try:
+            x, z = placement_map.get_build_coordinates_2d(castle_radius)
+        except NoValidPositionException:
+            print(f"No valid position found, exiting.")
             break
+        print(f"Found Building coordinate ({x}, {z}).")
 
-        build_castle(editor, best_coord, coord2d_to_ground_coord, stone_gradiant_placer, planks_gradiant_placer, get_rampart_function())
+        build_castle(editor, (x, z), placement_map.coord2d_to_ground_coord, stone_gradiant_placer, planks_gradiant_placer,
+                     get_rampart_function(), castle_radius=castle_radius, tower_ring_amount=random.choice([2, 3]))
+        editor.flushBuffer()
 
     # place_debug_hmap(normalize_2d_array_sum(height_score * centerness_score * flatness_score, palette_size + 1))
 

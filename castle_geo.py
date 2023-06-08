@@ -13,7 +13,14 @@ from utils import circle_around, increase_y, get_normalized_direction, coord_sca
 
 
 def gradiantPlacer(editor, block_pattern: list[Block]):
-    return lambda iterator: placeGradient(editor, block_list := list(iterator), min(y_coords := list(map(lambda b: b[1], block_list))), len(set(y_coords)), block_pattern)
+    def placer(iterator):
+        block_list = list(iterator)
+        if not len(block_list):
+            return
+        y_coords = list(map(lambda b: b[1], block_list))
+        placeGradient(editor, block_list, min(y_coords), len(set(y_coords)), block_pattern)
+
+    return placer
 
 
 def placeGradient(editor: Editor, iterator, comp, size, blocks: list[Block]):
@@ -58,34 +65,51 @@ def build_tower(tower_center, tower_width, tower_height, wall_function, roof_fun
     roof_function(roof_coords)
 
 
-def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, wall_placer_fct, roof_placer_fct, rampart_placer_fct, castle_size=None, tower_ring_amount=None):
-    if castle_size is None:
-        castle_size = random.randint(30, 75)
+def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, wall_placer_fct, roof_placer_fct, rampart_placer_fct, castle_radius=None, tower_ring_amount=None):
+    if castle_radius is None:
+        castle_radius = random.randint(30, 75)
     if tower_ring_amount is None:
-        tower_ring_amount = random.randint(1, int(castle_size / 10))
+        tower_ring_amount = random.randint(1, int(castle_radius / 20))
 
-    tower_amount_fun = lambda: random.randint(4, int((castle_size / 15) ** 2) + 3)
+    tower_amount_factor = random.randint(5, 8)
+    tower_amount_scaling = random.random() / 2 + 0.5
+    tower_amounts = [max(3, int(tower_amount_factor * i * tower_amount_scaling)) for i in range(1, tower_ring_amount + 1)]
 
-    tower_height_fun = lambda: random.randint(int(5 + 50 / ((castle_size / 10) ** 2 )), min(int(20 + 200 / ((castle_size / 10) ** 2 )), 200))
-    tower_width = random.randint(3, int(40 / (castle_size / 10) + 4))
-    wall_height_fun = lambda t_height: random.randint(int(t_height / 2), t_height - 2)
-    wall_width = random.randint(2, tower_width - 2)
+    tower_amount_fun = lambda i: tower_amounts[i]
+
+    tower_height_downscaling = random.random() / 2 + 0.5
+    downscaling_factor = random.randint(5, 10)
+    tower_base_height = random.randint(30, 50)
+    tower_heights = [int(tower_base_height - (i * downscaling_factor)) for i in range(1, tower_ring_amount + 1)]
+
+    min_height = 10
+    max_height = tower_base_height
+    tower_height_variation = random.randint(1, 8)
+    tower_height_fun_generator = lambda i: lambda: random.randint(max(tower_heights[i] - tower_height_variation, min_height), max(min_height, min(tower_heights[i] + tower_height_variation, max_height)))
+
+    def variation_clamped_around(_min, _max, around, var):
+        return random.randint(max(_min, around - var), min(around + var, _max))
+
+    tower_width_generator = lambda: random.randint(3, 15)
+    wall_height_fun = lambda t_height: variation_clamped_around(min_height - 2, t_height, int(t_height / 2), 5)
+    wall_width_fun = lambda t_width: variation_clamped_around(2, t_width, int(t_width / 2), 3)
 
     center_tower_amount = random.randint(1, 3)
     center_tower_width = random.randint(10, 20)
     center_tower_height = lambda: random.randint(40, 70)
     # Center tower
     build_tower_ring(False, castle_center, [1, 10, 10][center_tower_amount - 1], coord2d_to_ground_coord, editor, center_tower_amount,
-                     center_tower_height, center_tower_width, wall_height_fun, wall_width, wall_placer_fct, roof_placer_fct, rampart_placer_fct)
+                     center_tower_height, center_tower_width, wall_height_fun, wall_width_fun(center_tower_width), wall_placer_fct, roof_placer_fct, rampart_placer_fct)
 
     for i in range(tower_ring_amount):
-        build_tower_ring(True, castle_center, (i + 1) * (castle_size / tower_ring_amount), coord2d_to_ground_coord, editor, tower_amount_fun(),
-                         tower_height_fun, tower_width, wall_height_fun, wall_width, wall_placer_fct, roof_placer_fct, rampart_placer_fct)
+        tower_width = tower_width_generator()
+        build_tower_ring(True, castle_center, (i + 1) * (castle_radius / tower_ring_amount), coord2d_to_ground_coord, editor, tower_amount_fun(i),
+                         tower_height_fun_generator(i), tower_width, wall_height_fun, wall_width_fun(tower_width), wall_placer_fct, roof_placer_fct, rampart_placer_fct)
 
 
-def build_tower_ring(build_ramparts, ring_center, ring_size, coord2d_to_ground_coord, editor, tower_amount,
+def build_tower_ring(build_ramparts, ring_center, ring_radius, coord2d_to_ground_coord, editor, tower_amount,
                      tower_height_fun, tower_width, wall_height_fun, wall_width, wall_placer_fct, roof_placer_fct, rampart_placer_fct):
-    circle = list(circle_around(ring_center, ring_size, tower_amount))
+    circle = list(circle_around(ring_center, ring_radius, tower_amount))
     tower_heights = []
     # Place towers
     for x, z in circle:
