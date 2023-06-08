@@ -102,17 +102,22 @@ def main():
 
     # placeGradientBox(editor, Box((30, 70, 50), (10, 10, 1)), stone_gradient)
 
-    stone_gradiant_placer = gradiantPlacer(editor, stone_gradient)
-    planks_gradiant_placer = gradiantPlacer(editor, planks[::-1])
+    placement_map = PlacementMap(editor)
+    placement_map.show_steep_map([Block(color + "_concrete") for color in ["black", "purple", "red", "orange", "green", "lime", "white"]], 1, 40)
+    editor.flushBuffer()
+    input()
+
+    stone_gradiant_placer = placement_map.occupy_on_place(gradiantPlacer(editor, stone_gradient))
+    planks_gradiant_placer = placement_map.occupy_on_place(gradiantPlacer(editor, planks[::-1]))
 
     def get_rampart_function():
-        return gradiantPlacer(editor, [Block(name) for name in random.choice(
+        return placement_map.occupy_on_place(gradiantPlacer(editor, [Block(name) for name in random.choice(
             [["diorite", "calcite", "polished_diorite"],
              ["polished_andesite", "andesite", "polished_andesite"],
              ["cobbled_deepslate", "polished_deepslate"],
              ["deepslate_bricks", "cracked_deepslate_bricks", "deepslate_bricks", "cracked_deepslate_bricks",
               "deepslate_bricks", "cracked_deepslate_bricks", "deepslate_bricks", "cracked_deepslate_bricks"],
-             ["polished_blackstone", "blackstone", "polished_blackstone"]])])
+             ["polished_blackstone", "blackstone", "polished_blackstone"]])]))
 
     build_area = editor.getBuildArea()
 
@@ -143,17 +148,18 @@ def main():
             coords = [coords]
         return filter(lambda coord: build_area.contains(coord.to_3d(0)), coords)
 
-    placement_map = PlacementMap(editor)
+    try_amount = 3
+    castle_radius = random.randint(40, 60)
+    for i in range(try_amount):
 
-    castle_amount = 3
-    for i in range(castle_amount):
-        castle_radius = random.randint(40, 60)
         print(f"Castle size : {castle_radius}")
         try:
             x, z = placement_map.get_build_coordinates_2d(castle_radius)
         except NoValidPositionException:
-            print(f"No valid position found, exiting.")
-            break
+            print(f"Retrying with smaller castle")
+            castle_radius -= 7
+            continue
+
         print(f"Found Building coordinate ({x}, {z}).")
 
         build_castle(editor, (x, z), placement_map.coord2d_to_ground_coord, stone_gradiant_placer, planks_gradiant_placer,

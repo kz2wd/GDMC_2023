@@ -127,12 +127,37 @@ class PlacementMap:
         self.occupation_map[max(i - radius, 0): min(i + radius, self.occupation_map.shape[0]),
         max(j - radius, 0): min(j + radius, self.occupation_map.shape[1])] = 0
 
+    def show_steep_map(self, blocks, sampling, blur):
+        palette_size = len(blocks)
+        steep_map = self.normalize_2d_array_sum(self.get_flatness_score(blur, sampling, 1), palette_size)
+
+        def get_associated_block(value):
+            index = int(value)
+            if index > palette_size - 1:
+                return blocks[palette_size - 1]
+            return blocks[index]
+
+        for i in range(steep_map.shape[0]):
+            for j in range(steep_map.shape[1]):
+                x, z = self.coord_relative_to_absolute(i, j)
+                self.editor.placeBlock(self.coord2d_to_ground_coord(x, z), get_associated_block(steep_map[i, j]))
+
+    def occupy_coordinate(self, x, z):
+        self.occupation_map[self.coord_absolute_to_relative(x, z)] = 0
+
     def get_score_map(self, radius, sampling, flatness_factor, height_factor, centerness_factor):
         height_score = self.get_height_score(sampling, height_factor)
         return height_score \
             * self.get_centerness_score(height_score.shape, centerness_factor) \
             * self.get_flatness_score(sampling, radius, flatness_factor) \
             * self.get_occupation_score(sampling, 2 * radius)
+
+    def debug_occupation_area(self):
+        for i in range(self.occupation_map.shape[0]):
+            for j in range(self.occupation_map.shape[1]):
+                x, z = self.coord_relative_to_absolute(i, j)
+                block = Block("lime_stained_glass") if self.occupation_map[i, j] else Block("red_stained_glass")
+                self.editor.placeBlock(self.coord2d_to_ground_coord(x, z), block)
 
     def get_build_coordinates_2d(self, radius, sampling=None, flatness_factor=1, height_factor=1, centerness_factor=1,
                                  min_score=.1):
@@ -143,10 +168,17 @@ class PlacementMap:
         i, j = self.get_highest_index_2d(score_map)
         if score_map[i, j] < min_score:
             raise NoValidPositionException("No valid position found")
-        self.occupy_area(i, j, sampling, radius)
-        # for i in range(self.occupation_map.shape[0]):
-        #     for j in range(self.occupation_map.shape[1]):
-        #         x, z = self.coord_relative_to_absolute(i, j)
-        #         block = Block("lime_stained_glass") if self.occupation_map[i, j] else Block("red_stained_glass")
-        #         self.editor.placeBlock(self.coord2d_to_ground_coord(x, z), block)
+        # self.occupy_area(i, j, sampling, radius)
+        # self.debug_occupation_area()
         return self.coord_relative_to_absolute(*self.indexes_to_local_coord(i, j, sampling))
+
+    def occupy_on_place(self, place_function):
+        def new_place_function(coord_iter):
+            coord_list = list(coord_iter)
+            for coord in coord_list:
+                if not self.build_area.contains(coord):
+                    continue
+                self.occupation_map[self.coord_absolute_to_relative(coord[0], coord[2])] = 0
+            place_function(coord_list)
+
+        return new_place_function
