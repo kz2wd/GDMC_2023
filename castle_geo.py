@@ -65,22 +65,22 @@ def build_tower(tower_center, tower_width, tower_height, wall_function, roof_fun
     roof_function(roof_coords)
 
 
-def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, wall_placer_fct, roof_placer_fct, rampart_placer_fct, castle_radius=None, tower_ring_amount=None):
+def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, wall_placer_fct, roof_placer_fct, rampart_placer_fct, castle_radius=None, ring_amount=None):
     if castle_radius is None:
         castle_radius = random.randint(30, 75)
-    if tower_ring_amount is None:
-        tower_ring_amount = random.randint(1, int(castle_radius / 20))
+    if ring_amount is None:
+        ring_amount = random.randint(1, int(castle_radius / 20))
 
     tower_amount_factor = random.randint(5, 8)
     tower_amount_scaling = random.random() / 2 + 0.5
-    tower_amounts = [max(3, int(tower_amount_factor * i * tower_amount_scaling)) for i in range(1, tower_ring_amount + 1)]
+    tower_amounts = [max(3, int(tower_amount_factor * i * tower_amount_scaling)) for i in range(1, ring_amount + 1)]
 
     tower_amount_fun = lambda i: tower_amounts[i]
 
     tower_height_downscaling = random.random() / 2 + 0.5
     downscaling_factor = random.randint(5, 10)
     tower_base_height = random.randint(30, 50)
-    tower_heights = [int(tower_base_height - (i * downscaling_factor)) for i in range(1, tower_ring_amount + 1)]
+    tower_heights = [int(tower_base_height - (i * downscaling_factor)) for i in range(1, ring_amount + 1)]
 
     min_height = 10
     max_height = tower_base_height
@@ -101,10 +101,21 @@ def build_castle(editor: Editor, castle_center, coord2d_to_ground_coord, wall_pl
     build_tower_ring(False, castle_center, [1, 10, 10][center_tower_amount - 1], coord2d_to_ground_coord, editor, center_tower_amount,
                      center_tower_height, center_tower_width, wall_height_fun, wall_width_fun(center_tower_width), wall_placer_fct, roof_placer_fct, rampart_placer_fct)
 
-    for i in range(tower_ring_amount):
-        tower_width = tower_width_generator()
-        build_tower_ring(True, castle_center, (i + 1) * (castle_radius / tower_ring_amount), coord2d_to_ground_coord, editor, tower_amount_fun(i),
-                         tower_height_fun_generator(i), tower_width, wall_height_fun, wall_width_fun(tower_width), wall_placer_fct, roof_placer_fct, rampart_placer_fct)
+    for i in range(ring_amount):
+        ring_radius = (i + 1) * (castle_radius / ring_amount)
+        if random.random() > .5:
+            # Generate tower ring
+            tower_width = tower_width_generator()
+            build_tower_ring(True, castle_center, ring_radius, coord2d_to_ground_coord, editor, tower_amount_fun(i),
+                             tower_height_fun_generator(i), tower_width, wall_height_fun, wall_width_fun(tower_width), wall_placer_fct, roof_placer_fct, rampart_placer_fct)
+        else:
+            # Generate habitation ring
+            def house_wall_placer(coords):
+                for coord in coords:
+                    editor.placeBlock(coord, Block("oak_log"))
+
+            house_fun = house_builder_generator(10, 10, house_wall_placer, roof_placer_fct)
+            build_habitation_ring(castle_center,  ring_radius, coord2d_to_ground_coord, editor, tower_amount_fun(i), house_fun)
 
 
 def build_tower_ring(build_ramparts, ring_center, ring_radius, coord2d_to_ground_coord, editor, tower_amount,
@@ -126,24 +137,30 @@ def build_tower_ring(build_ramparts, ring_center, ring_radius, coord2d_to_ground
                 continue
             coord1 = coord2d_to_ground_coord(x1, z1)
             coord2 = coord2d_to_ground_coord(x2, z2)
-            # tower_shift = coord_scalar_mul(get_normalized_direction(coord2, coord1), tower_width / 2)
 
             rampart_blocks = [increase_y(coord, i) for i in range(wall_height) for coord in
                               geometry.line3D(coord_int(coord1), coord_int(coord2), width=wall_width)]
+
             rampart_placer_fct(rampart_blocks)
 
-            # wall_shift_functions = lambda shift: lambda vector: shift_on_side(vector, shift)
-            # for shift_function in map(wall_shift_functions, [wall_radius, -wall_radius]):
-            #     shift_vector = with_y(shift_function(coords_sub(coord1, coord2)), 0)
-            #     shifted_coord1 = coords_add(coord1, shift_vector)
-            #     shifted_coord2 = coords_add(coord2, shift_vector)
-            #
-            #     # start_coord1 = coords_add(coord1, tower_shift)
-            #     # end_coord2 = coords_add(coord2, coord_scalar_mul(tower_shift, -1))
-            #     rampart_blocks = [increase_y(coord, i) for i in range(wall_height) for coord in
-            #                       geometry.line3D(coord_int(shifted_coord1), coord_int(shifted_coord2))]
-            #     rampart_placer_fct(rampart_blocks)
 
+def house_builder_generator(house_height, house_size, wall_placer, roof_placer):
+    def house_builder(center):
+        wall_placer(geometry.cylinder(center, diameters=house_size, length=house_height, tube=True))
+        for y, i in enumerate(range(house_size, 3, -2), start=house_height):
+            roof_placer(geometry.cylinder(increase_y(center, y), diameters=i, length=1))
+    return house_builder
+
+
+def build_habitation_ring(ring_center, ring_radius, coord2d_to_ground_coord, editor, house_amount,
+                     house_fun):
+    circle = list(circle_around(ring_center, ring_radius, house_amount))
+    # Place habitations
+    for x, z in circle:
+        if not editor.getBuildArea().contains((x, 0, z)):
+            continue
+        base_coord = coord2d_to_ground_coord(x, z)
+        house_fun(base_coord)
 
 
 

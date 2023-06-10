@@ -1,3 +1,5 @@
+import networkx
+import networkx as nx
 import numpy as np
 from gdpc import Editor, Block
 
@@ -6,6 +8,10 @@ from utils import increase_y
 
 class NoValidPositionException(Exception):
     pass
+
+
+directions_ortho = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+directions_diag = (1, 1), (-1, 1), (-1, -1), (1, -1)
 
 
 class PlacementMap:
@@ -18,6 +24,7 @@ class PlacementMap:
         self.height_map = self.sample_array2d(self.__get_heightmap_no_trees(),
                                               self.default_precision)
         self.occupation_map = np.ones_like(self.height_map)
+        self.graph: networkx.Graph | None = None
 
     def __get_heightmap_no_trees(self) -> np.ndarray:
         """Return a list of block representing a heightmap without trees
@@ -142,6 +149,16 @@ class PlacementMap:
                 x, z = self.coord_relative_to_absolute(i, j)
                 self.editor.placeBlock(self.coord2d_to_ground_coord(x, z), get_associated_block(steep_map[i, j]))
 
+    @staticmethod
+    def iterate_over_2d_map(map2d):
+        for i in range(map2d.shape[0]):
+            for j in range(map2d.shape[1]):
+                yield i, j
+
+    def yield_surface_coords(self):
+        for i, j in self.iterate_over_2d_map(self.height_map):
+            yield i, self.height_map[(i, j)], j
+
     def occupy_coordinate(self, x, z):
         self.occupation_map[self.coord_absolute_to_relative(x, z)] = 0
 
@@ -150,7 +167,8 @@ class PlacementMap:
         return height_score \
             * self.get_centerness_score(height_score.shape, centerness_factor) \
             * self.get_flatness_score(sampling, radius, flatness_factor) \
-            * self.get_occupation_score(sampling, 2 * radius)
+            * self.get_occupation_score(sampling, 2 * radius) \
+            * self.get_exclusion_score(height_score.shape, int(radius / sampling))
 
     def debug_occupation_area(self):
         for i in range(self.occupation_map.shape[0]):
@@ -182,3 +200,50 @@ class PlacementMap:
             place_function(coord_list)
 
         return new_place_function
+
+    @staticmethod
+    def coord2d_neighbors(coord2d, directions):
+        for d in directions:
+            yield coord2d[0] + d[0], coord2d[1] + d[1]
+
+    def fill_graph(self):
+        self.graph = nx.Graph()
+
+        for coord in self.yield_surface_coords():
+            coord = self.coord_relative_to_absolute(coord[0], coord[2])
+            self.graph.add_node(coord)
+
+        for coordinates in self.graph.nodes.keys():
+            for directions, factor in [(directions_ortho, 1), (directions_diag, 2)]:
+                for coord in self.coord2d_neighbors(coordinates, directions):
+                    if coord in self.graph.nodes.keys():
+                        self.graph.add_edge(coordinates, coord, weight=(100 + abs(
+                            self.height_map[self.coord_absolute_to_relative(*coord)] - self.height_map[
+                                self.coord_absolute_to_relative(*coordinates)]) * 10) * factor)
+
+    def compute_roads(self, start, end) -> bool:
+        if self.graph is None:
+            self.fill_graph()
+
+        try:
+            path = nx.dijkstra_path(self.graph, start, end)
+        except nx.NetworkXException:
+            print("No path found !")
+            return False
+
+        for coord in path:
+            self.editor.placeBlock(self.coord2d_to_ground_coord(*coord), Block("emerald_block"))
+
+        # Update weights to use the roads
+        for c1, c2 in zip(path[:-2], path[1:]):
+            if self.graph.has_edge(c1, c2):
+                self.graph[c1][c2]['weight'] *= .9
+
+    @staticmethod
+    def get_exclusion_score(shape, radius):
+        exclusion = np.ones(shape)
+        exclusion[:radius, :] = 0
+        exclusion[:, :radius] = 0
+        exclusion[:, -radius:] = 0
+        exclusion[-radius:, :] = 0
+        return exclusion

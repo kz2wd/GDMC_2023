@@ -16,74 +16,11 @@ import pstats
 
 import numpy as np
 
+import territory
 from PlacementMap import PlacementMap, NoValidPositionException
+from blob_expand import CoordExplore
 from castle_geo import placeGradientBox, placeGradient, build_castle, gradiantPlacer, build_tower_ring
 from utils import shift_on_side, coord_normalize
-
-
-class CoordExplore:
-    def __hash__(self) -> int:
-        return int(self.x * 7 + self.z * 17)
-
-    def __eq__(self, other) -> bool:
-        return self.x == other.x and self.z == other.z
-
-    def __init__(self, x, z, build_area):
-        self.x = x
-        self.z = z
-        self.build_area = build_area
-
-    @property
-    def coord(self):
-        return self.x, self.z
-
-    def __add__(self, other: tuple):
-        return CoordExplore(self.x + other[0], self.z + other[1], self.build_area)
-
-    @property
-    def to_relative(self) -> tuple[int, int]:
-        return self.x - self.build_area.begin[0], self.z - self.build_area.begin[2]
-
-    @property
-    def to_absolute(self) -> tuple[int, int]:
-        return self.x + self.build_area.begin[0], self.z + self.build_area.begin[2]
-
-    def distance_to(self, other: CoordExplore) -> float:
-        return math.sqrt((other.x - self.x) ** 2 + (other.z - self.z) ** 2)
-
-    def __str__(self):
-        return f"{self.x} {self.z}"
-
-    def to_3d(self, y):
-        return self.x, y, self.z
-
-
-def blob_expand(editor, start: tuple[int, int], max_rel_diff=1, max_abs_diff=5, max_distance=5) -> list[
-    CoordExplore | Any]:
-    hmap = editor.worldSlice.heightmaps["WORLD_SURFACE"]
-    build_area = editor.getBuildArea()
-    start = CoordExplore(start[0], start[1], build_area)
-    blob = [start]
-    to_explore = [start]
-    explored = {start}
-    while len(to_explore) > 0:
-        current = to_explore.pop()
-        blob.append(current)
-        explored.add(current)
-        for direction in [(1, 0), (0, 1), (-1, 0), (0, -1)]:
-            neighbor = current + direction
-            rel_cur = current.to_relative
-            rel_neigb = neighbor.to_relative
-            if neighbor not in explored \
-                    and neighbor.distance_to(start) <= max_distance \
-                    and 0 <= rel_cur[0] < hmap.shape[0] and 0 <= rel_cur[1] < hmap.shape[1] \
-                    and 0 <= rel_neigb[0] < hmap.shape[0] and 0 <= rel_neigb[1] < hmap.shape[1] \
-                    and abs(hmap[rel_cur] - hmap[rel_neigb]) <= max_rel_diff \
-                    and abs(hmap[rel_neigb] - hmap[start.to_relative]) <= max_abs_diff:
-                explored.add(neighbor)
-                to_explore.append(neighbor)
-
-    return blob
 
 
 def main():
@@ -103,9 +40,9 @@ def main():
     # placeGradientBox(editor, Box((30, 70, 50), (10, 10, 1)), stone_gradient)
 
     placement_map = PlacementMap(editor)
-    placement_map.show_steep_map([Block(color + "_concrete") for color in ["black", "purple", "red", "orange", "green", "lime", "white"]], 1, 40)
-    editor.flushBuffer()
-    input()
+    # placement_map.show_steep_map([Block(color + "_concrete") for color in ["black", "purple", "red", "orange", "green", "lime", "white"]], 1, 40)
+    # editor.flushBuffer()
+    # input()
 
     stone_gradiant_placer = placement_map.occupy_on_place(gradiantPlacer(editor, stone_gradient))
     planks_gradiant_placer = placement_map.occupy_on_place(gradiantPlacer(editor, planks[::-1]))
@@ -121,7 +58,7 @@ def main():
 
     build_area = editor.getBuildArea()
 
-    debug_palette = [Block(color + "_stained_glass") for color in ["lime", "yellow", "red", "purple", "black"]][::-1]
+    debug_palette = [Block(color + "_concrete") for color in ["lime", "yellow", "red", "purple", "black"]][::-1]
     palette_size = len(debug_palette)
 
     def get_associated_block(value):
@@ -137,16 +74,14 @@ def main():
     #             x_abs, z_abs = coord_relative_to_absolute(x_rel, z_rel)
     #             editor.placeBlock((x_abs, hmap[x_rel, z_rel] - 1, z_abs), get_associated_block(score_map[i, j]))
 
-    def coord2d_to_3d_surface(coord: CoordExplore, shift: tuple[int, int, int] = None):
-        if shift is None:
-            return coord.x, editor.worldSlice.heightmaps["WORLD_SURFACE"][coord.to_relative], coord.z
-        return coord.x + shift[0], editor.worldSlice.heightmaps["WORLD_SURFACE"][coord.to_relative] + shift[
-            1], coord.z + shift[2]
-
     def filter_in_build(coords):
         if not isinstance(coords, Sequence):
             coords = [coords]
         return filter(lambda coord: build_area.contains(coord.to_3d(0)), coords)
+
+    territory.build_territories(placement_map)
+    editor.flushBuffer()
+    exit(0)
 
     try_amount = 3
     castle_radius = random.randint(40, 60)
@@ -163,7 +98,7 @@ def main():
         print(f"Found Building coordinate ({x}, {z}).")
 
         build_castle(editor, (x, z), placement_map.coord2d_to_ground_coord, stone_gradiant_placer, planks_gradiant_placer,
-                     get_rampart_function(), castle_radius=castle_radius, tower_ring_amount=random.choice([2, 3]))
+                     get_rampart_function(), castle_radius=castle_radius, ring_amount=random.choice([2, 3]))
         editor.flushBuffer()
 
     # place_debug_hmap(normalize_2d_array_sum(height_score * centerness_score * flatness_score, palette_size + 1))
