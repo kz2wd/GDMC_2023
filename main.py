@@ -79,7 +79,12 @@ def main():
             coords = [coords]
         return filter(lambda coord: build_area.contains(coord.to_3d(0)), coords)
 
-    territory.build_territories(placement_map)
+    def batiment_builder(center, radius):
+        build_castle(editor, center, placement_map.coord2d_to_ground_coord, stone_gradiant_placer,
+                     planks_gradiant_placer,
+                     get_rampart_function(), castle_radius=radius, ring_amount=random.choice([2, 3]))
+
+    territory.build_territories(placement_map, batiment_builder)
     editor.flushBuffer()
     exit(0)
 

@@ -2,11 +2,12 @@ import random
 
 from gdpc import Block
 
+import castle_geo
 from PlacementMap import PlacementMap, NoValidPositionException
 from blob_expand import blob_expand, CoordExplore
 
 
-def build_territories(placement_map: PlacementMap):
+def build_territories(placement_map: PlacementMap, batiment_builder):
 
     def coord2d_to_3d_surface(coord: CoordExplore, shift: tuple[int, int, int] = None):
         if shift is None:
@@ -17,14 +18,16 @@ def build_territories(placement_map: PlacementMap):
     debug_palette = [Block(color + "_concrete") for color in ["lime", "yellow", "red", "purple", "black"]]
     palette_size = len(debug_palette)
 
-    district_amount = 15
+    district_amount = 20
     district_centers = []
+    district_radius = []
     occupied_coords = set()
     for i in range(district_amount):
-        district_size = random.randint(10, 40)
+        district_size = random.randint(20, 60)
         try:
             x, z = placement_map.get_build_coordinates_2d(district_size)
             district_centers.append((x, z))
+            district_radius.append(district_size)
         except NoValidPositionException as e:
             print(f"{e.args}")
             continue
@@ -39,4 +42,7 @@ def build_territories(placement_map: PlacementMap):
 
     for a, b in zip(district_centers[1:], district_centers[:-1]):
         placement_map.compute_roads(a, b)
+
+    for center, radius in zip(district_centers, district_radius):
+        batiment_builder(center, radius)
 
