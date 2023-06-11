@@ -9,7 +9,7 @@ from gdpc.vector_tools import l1Norm
 from glm import ivec3
 
 from PlacementMap import PlacementMap
-from blob_expand import blob_expand, get_borders
+from blob_expand import blob_expand, get_borders, get_borders_from_outside
 from utils import circle_around, increase_y, get_normalized_direction, coord_scalar_mul, coords_add, \
     perpendicular_vector, shift_on_side, coords_sub, get_norm, with_y, coord_int, coord_in_area
 
@@ -65,7 +65,7 @@ class CastleRing:
 
     def build_tower_ring(self):
         self.get_territory()
-        circle = list(get_borders(self.blocks, self.center, self.tower_amount, self.radius))
+        circle = list(get_borders_from_outside(self.blocks, self.center, self.tower_amount, self.radius))
         tower_heights = []
         # Place towers
         for x, z in circle:

@@ -83,14 +83,28 @@ def get_borders(coord_area, center, point_amount, max_radius):
     angle_offset = random.random() * 2 * math.pi
     for i in range(point_amount):
         angle = i * 2 * math.pi / point_amount + angle_offset
+        # raycast
+        radius = 0
+        coord = from_angle(angle, radius, center)
+        radius += 1
+        next_coord = from_angle(angle, radius, center)
+        while next_coord in coord_area and radius <= max_radius:
+            radius += 1
+            coord = next_coord
+            next_coord = from_angle(angle, radius, center)
+
+        yield coord
+
+
+def get_borders_from_outside(coord_area, center, point_amount, max_radius):
+    angle_offset = random.random() * 2 * math.pi
+    for i in range(point_amount):
+        angle = i * 2 * math.pi / point_amount + angle_offset
         # raycast from outside
         radius = max_radius
         coord = from_angle(angle, radius, center)
-        radius -= 1
-        next_coord = from_angle(angle, radius, center)
-        while next_coord not in coord_area and radius > 0:
+        while coord not in coord_area and radius > 0:
             radius -= 1
-            coord = next_coord
-            next_coord = from_angle(angle, radius, center)
+            coord = from_angle(angle, radius, center)
 
         yield coord
