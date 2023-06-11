@@ -7,7 +7,7 @@ def circle_around(center: tuple[int, int], radius: int, amount_of_points: int):
     angle_offset = random.random() * 2 * math.pi
     for i in range(amount_of_points):
         angle = i * 2 * math.pi / amount_of_points + angle_offset
-        yield math.cos(angle) * radius + center[0], math.sin(angle) * radius + center[1]
+        yield int(math.cos(angle) * radius + center[0]), int(math.sin(angle) * radius + center[1])
 
 
 def increase_y(coord, increase):
@@ -66,3 +66,16 @@ def perpendicular_vector(vector):
 
 def shift_on_side(vector, shift_length):
     return coord_scalar_mul(coord_normalize(perpendicular_vector(vector)), shift_length)
+
+
+def coord_in_area(coord, center, radius):
+    if len(coord) == 2:
+        return center[0] - radius <= coord[0] <= center[0] + radius \
+            and center[1] - radius <= coord[1] <= center[1] + radius
+    if len(coord) == 3:
+        return coord_in_area((coord[0], coord[2]), center, radius)
+    return False
+
+
+def coord3d_list_to_2d(coords):
+    return list(map(lambda c: (c[0], c[2]), coords))

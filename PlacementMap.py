@@ -1,9 +1,11 @@
+import random
+
 import networkx
 import networkx as nx
 import numpy as np
 from gdpc import Editor, Block
 
-from utils import increase_y
+from utils import increase_y, coord_in_area
 
 
 class NoValidPositionException(Exception):
@@ -24,6 +26,7 @@ class PlacementMap:
         self.height_map = self.sample_array2d(self.__get_heightmap_no_trees(),
                                               self.default_precision)
         self.occupation_map = np.ones_like(self.height_map)
+        self.bonus_map = np.ones_like(self.height_map, dtype=np.float64)
         self.graph: networkx.Graph | None = None
 
     def __get_heightmap_no_trees(self) -> np.ndarray:
@@ -120,13 +123,20 @@ class PlacementMap:
         return self.generate_decay_matrix(shape[0]) * factor
 
     def get_height_score(self, sampling, factor):
-        return self.normalize_2d_array_sum(self.sample_array2d(self.height_map, sampling) * factor, 1)
+        return self.normalize_2d_array_sum(self.sample_array2d(self.height_map, sampling), factor)
+
+    @staticmethod
+    def convolut_map(_map, sampling, blur, convolut_fct):
+        return np.array([[convolut_fct(_map[max(i - blur, 0): min(i + blur, _map.shape[0]),
+                          max(j - blur, 0): min(j + blur, _map.shape[1])].flatten()) for
+                   j in range(0, _map.shape[1], sampling)] for i in range(0, _map.shape[0], sampling)])
 
     def get_occupation_score(self, sampling, blur):
         _map = self.occupation_map
-        return np.array([[np.min(_map[max(i - blur, 0): min(i + blur, _map.shape[0]),
-                                 max(j - blur, 0): min(j + blur, _map.shape[1])].flatten()) for
-                          j in range(0, _map.shape[1], sampling)] for i in range(0, _map.shape[0], sampling)])
+        return self.convolut_map(_map, sampling, blur, np.min)
+
+    def get_bonus_score(self, sampling, blur, factor):
+        return self.convolut_map(self.bonus_map, sampling, blur, np.sum) * factor
 
     def occupy_area(self, i, j, sampling, radius):
         i *= sampling
@@ -162,13 +172,20 @@ class PlacementMap:
     def occupy_coordinate(self, x, z):
         self.occupation_map[self.coord_absolute_to_relative(x, z)] = 0
 
-    def get_score_map(self, radius, sampling, flatness_factor, height_factor, centerness_factor):
+    def get_score_map(self, radius, sampling, flatness_factor, height_factor, centerness_factor, bonus_factor, allow_next_to_occupied_zone):
         height_score = self.get_height_score(sampling, height_factor)
         return height_score \
             * self.get_centerness_score(height_score.shape, centerness_factor) \
             * self.get_flatness_score(sampling, radius, flatness_factor) \
-            * self.get_occupation_score(sampling, 2 * radius) \
-            * self.get_exclusion_score(height_score.shape, int(radius / sampling))
+            * self.get_occupation_score(sampling, radius if allow_next_to_occupied_zone else 2 * radius) \
+            * self.get_exclusion_score(height_score.shape, int(radius / sampling)) \
+            * self.get_bonus_score(sampling, sampling, bonus_factor)
+
+    def add_bonus_on_area(self, indexes, radius, bonus):
+        i, j = indexes
+        for a in range(max(0, i - radius), min(self.bonus_map.shape[0], i + radius)):
+            for b in range(max(0, j - radius), min(self.bonus_map.shape[1], j + radius)):
+                self.bonus_map[a, b] *= bonus
 
     def debug_occupation_area(self):
         for i in range(self.occupation_map.shape[0]):
@@ -178,14 +195,18 @@ class PlacementMap:
                 self.editor.placeBlock(self.coord2d_to_ground_coord(x, z), block)
 
     def get_build_coordinates_2d(self, radius, sampling=None, flatness_factor=1, height_factor=1, centerness_factor=1,
-                                 min_score=.1):
+                                 bonus_factor=1,
+                                 min_score=.1, allow_next_to_occupied_zone=False, apply_bonus=None):
         if sampling is None:
             sampling = radius
 
-        score_map = self.get_score_map(radius, sampling, flatness_factor, height_factor, centerness_factor)
+        score_map = self.get_score_map(radius, sampling, flatness_factor, height_factor, centerness_factor, bonus_factor,
+                                       allow_next_to_occupied_zone)
         i, j = self.get_highest_index_2d(score_map)
         if score_map[i, j] < min_score:
             raise NoValidPositionException("No valid position found")
+        if apply_bonus:
+            self.add_bonus_on_area((i, j), int(1.1 * radius), 5)
         # self.occupy_area(i, j, sampling, radius)
         # self.debug_occupation_area()
         return self.coord_relative_to_absolute(*self.indexes_to_local_coord(i, j, sampling))
@@ -217,27 +238,30 @@ class PlacementMap:
             for directions, factor in [(directions_ortho, 1), (directions_diag, 2)]:
                 for coord in self.coord2d_neighbors(coordinates, directions):
                     if coord in self.graph.nodes.keys():
-                        self.graph.add_edge(coordinates, coord, weight=(100 + abs(
+                        self.graph.add_edge(coordinates, coord, weight=(100 + (abs(
                             self.height_map[self.coord_absolute_to_relative(*coord)] - self.height_map[
-                                self.coord_absolute_to_relative(*coordinates)]) * 10) * factor)
+                                self.coord_absolute_to_relative(*coordinates)]) * 10) ** 2) * factor)
 
     def compute_roads(self, start, end) -> bool:
         if self.graph is None:
             self.fill_graph()
 
         try:
-            path = nx.dijkstra_path(self.graph, start, end)
+            if len(start) == 1:
+                path = nx.dijkstra_path(self.graph, start, end)
+            else:
+                path = nx.multi_source_dijkstra(self.graph, start, end)[1]
+
         except nx.NetworkXException:
             print("No path found !")
             return False
-
         for coord in path:
             self.editor.placeBlock(self.coord2d_to_ground_coord(*coord), Block("emerald_block"))
 
         # Update weights to use the roads
         for c1, c2 in zip(path[:-2], path[1:]):
             if self.graph.has_edge(c1, c2):
-                self.graph[c1][c2]['weight'] *= .9
+                self.graph[c1][c2]['weight'] *= .5
 
     @staticmethod
     def get_exclusion_score(shape, radius):
@@ -247,3 +271,18 @@ class PlacementMap:
         exclusion[:, -radius:] = 0
         exclusion[-radius:, :] = 0
         return exclusion
+
+    def random_point_on_map(self, point_amount, excluded_center, excluded_radius, try_amount=None):
+        if try_amount is None:
+            try_amount = 2 * point_amount
+
+        max_x, max_z = self.build_area.size[0], self.build_area.size[2]
+        correct_points = 0
+        tries = 0
+        while correct_points < point_amount and tries < try_amount:
+            x, z = self.coord_relative_to_absolute(random.randint(0, max_x), random.randint(0, max_z))
+            if not coord_in_area((x, z), excluded_center, excluded_radius):
+                correct_points += 1
+                yield x, z
+
+            tries += 1

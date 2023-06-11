@@ -19,12 +19,11 @@ import numpy as np
 import territory
 from PlacementMap import PlacementMap, NoValidPositionException
 from blob_expand import CoordExplore
-from castle_geo import placeGradientBox, placeGradient, build_castle, gradiantPlacer, build_tower_ring
+from castle_geo import placeGradientBox, placeGradient, gradiantPlacer, Castle
 from utils import shift_on_side, coord_normalize
 
 
 def main():
-
     colors = "white, orange, magenta, light_blue, yellow, lime, pink, gray, light_gray, cyan, purple, blue, brown, " \
              "green, red, black".split(", ")
 
@@ -80,9 +79,11 @@ def main():
         return filter(lambda coord: build_area.contains(coord.to_3d(0)), coords)
 
     def batiment_builder(center, radius):
-        build_castle(editor, center, placement_map.coord2d_to_ground_coord, stone_gradiant_placer,
-                     planks_gradiant_placer,
-                     get_rampart_function(), castle_radius=radius, ring_amount=random.choice([2, 3]))
+        c = Castle(center, radius, random.choice([2, 3]), placement_map)
+        c.build_castle(editor, placement_map.coord2d_to_ground_coord,
+                       stone_gradiant_placer, planks_gradiant_placer,
+                       get_rampart_function())
+        return c
 
     territory.build_territories(placement_map, batiment_builder)
     editor.flushBuffer()
@@ -102,7 +103,8 @@ def main():
 
         print(f"Found Building coordinate ({x}, {z}).")
 
-        build_castle(editor, (x, z), placement_map.coord2d_to_ground_coord, stone_gradiant_placer, planks_gradiant_placer,
+        build_castle(editor, (x, z), placement_map.coord2d_to_ground_coord, stone_gradiant_placer,
+                     planks_gradiant_placer,
                      get_rampart_function(), castle_radius=castle_radius, ring_amount=random.choice([2, 3]))
         editor.flushBuffer()
 

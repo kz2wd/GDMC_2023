@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from typing import Any
+import random
 
 from gdpc import editor
 
@@ -72,3 +73,24 @@ def blob_expand(build_area, hmap, start: tuple[int, int], max_rel_diff=1, max_ab
                 to_explore.append(neighbor)
 
     return blob
+
+
+def from_angle(angle, radius, offset):
+    return int(math.cos(angle) * radius + offset[0]), int(math.sin(angle) * radius + offset[1])
+
+
+def get_borders(coord_area, center, point_amount, max_radius):
+    angle_offset = random.random() * 2 * math.pi
+    for i in range(point_amount):
+        angle = i * 2 * math.pi / point_amount + angle_offset
+        # raycast from outside
+        radius = max_radius
+        coord = from_angle(angle, radius, center)
+        radius -= 1
+        next_coord = from_angle(angle, radius, center)
+        while next_coord not in coord_area and radius > 0:
+            radius -= 1
+            coord = next_coord
+            next_coord = from_angle(angle, radius, center)
+
+        yield coord
