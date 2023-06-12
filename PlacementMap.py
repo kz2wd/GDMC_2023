@@ -1,11 +1,12 @@
 import random
+from collections import defaultdict
 
 import networkx
 import networkx as nx
 import numpy as np
 from gdpc import Editor, Block
 
-from utils import increase_y, coord_in_area
+from utils import increase_y, coord_in_area, with_y
 
 
 class NoValidPositionException(Exception):
@@ -27,7 +28,15 @@ class PlacementMap:
                                               self.default_precision)
         self.occupation_map = np.ones_like(self.height_map)
         self.bonus_map = np.ones_like(self.height_map, dtype=np.float64)
+
         self.graph: networkx.Graph | None = None
+        self.all_roads: set[tuple] = set()
+        self.roads_infos: dict[str, defaultdict[tuple, int]] = {'INNER': defaultdict(int),
+                                                                      'MIDDLE': defaultdict(int),
+                                                                      'OUTER': defaultdict(int)}
+
+        self.__recently_added_roads = None
+        self.roads_y = None
 
     def __get_heightmap_no_trees(self) -> np.ndarray:
         """Return a list of block representing a heightmap without trees
@@ -80,6 +89,8 @@ class PlacementMap:
         return x - self.build_area.begin.x, z - self.build_area.begin.z
 
     def coord2d_to_ground_coord(self, x, z):
+        if not self.build_area.contains((x, 0, z)):
+            return (x, 0, z)
         return tuple(map(int, (x, self.height_map[tuple(map(int, self.coord_absolute_to_relative(x, z)))], z)))
 
     @staticmethod
@@ -231,8 +242,7 @@ class PlacementMap:
         self.graph = nx.Graph()
 
         for coord in self.yield_surface_coords():
-            coord = self.coord_relative_to_absolute(coord[0], coord[2])
-            self.graph.add_node(coord)
+            self.graph.add_node(self.coord_relative_to_absolute(coord[0], coord[2]))
 
         for coordinates in self.graph.nodes.keys():
             for directions, factor in [(directions_ortho, 1), (directions_diag, 2)]:
@@ -247,7 +257,7 @@ class PlacementMap:
             self.fill_graph()
 
         try:
-            if len(start) == 1:
+            if type(start) == tuple:
                 path = nx.dijkstra_path(self.graph, start, end)
             else:
                 path = nx.multi_source_dijkstra(self.graph, start, end)[1]
@@ -255,8 +265,30 @@ class PlacementMap:
         except nx.NetworkXException:
             print("No path found !")
             return False
+
+        self.__recently_added_roads = {'INNER': set(), 'MIDDLE': set(), 'OUTER': set()}
         for coord in path:
-            self.editor.placeBlock(self.coord2d_to_ground_coord(*coord), Block("emerald_block"))
+            # INNER PART
+            self.__add_road_block(coord, 'INNER')
+
+            # MIDDLE PART
+            def shift(x=0, z=0):
+                return coord[0] + x, coord[1] + z
+
+            self.__add_road_block(shift(x=1), 'MIDDLE')
+            self.__add_road_block(shift(x=-1), 'MIDDLE')
+            self.__add_road_block(shift(z=1), 'MIDDLE')
+            self.__add_road_block(shift(z=-1), 'MIDDLE')
+
+            # OUTER PART
+            self.__add_road_block(shift(x=1, z=1), 'OUTER')
+            self.__add_road_block(shift(x=-1, z=1), 'OUTER')
+            self.__add_road_block(shift(x=1, z=-1), 'OUTER')
+            self.__add_road_block(shift(x=-1, z=-1), 'OUTER')
+            self.__add_road_block(shift(x=2), 'OUTER')
+            self.__add_road_block(shift(x=-2), 'OUTER')
+            self.__add_road_block(shift(z=2), 'OUTER')
+            self.__add_road_block(shift(z=-2), 'OUTER')
 
         # Update weights to use the roads
         for c1, c2 in zip(path[:-2], path[1:]):
@@ -286,3 +318,64 @@ class PlacementMap:
                 yield x, z
 
             tries += 1
+
+    def __add_road_block(self, road_coord, placement: str):
+
+        delete = False
+        for key in self.roads_infos:
+            if key == placement:
+                if road_coord not in self.__recently_added_roads[placement]:
+                    self.roads_infos[key][road_coord] += 1
+                delete = True
+            else:
+                if road_coord in self.roads_infos[key]:
+                    if delete:
+                        self.roads_infos[key].pop(road_coord)
+                    else:
+                        return
+
+        self.__recently_added_roads[placement].add(road_coord)
+        self.all_roads.add(self.coord2d_to_ground_coord(*road_coord))
+        self.occupation_map[self.coord_absolute_to_relative(*road_coord)] = 0
+
+    def build_roads(self, floor_pattern: dict[str, dict[str, float]], slab_pattern=None):
+        # self.equalize_roads()
+
+        # clean above roads
+        for road in self.all_roads:
+            for i in range(1, 20):
+                coordinates = increase_y(road, i)
+
+                # Check for building collision here
+                if self.build_area.contains(coordinates):
+                    self.editor.placeBlock(coordinates, Block("air"))
+
+        # place blocks
+        for key in self.roads_infos.keys():
+            for road in self.roads_infos[key]:
+                coord = self.coord2d_to_ground_coord(*road)
+                # Default : place a block
+                chose_pattern = floor_pattern
+                shift = 0
+
+                # If the average block y is near half :
+                if slab_pattern and 0.5 < coord[1] - int(coord[1]):
+                    # place a slab
+                    chose_pattern = slab_pattern
+                    shift = 1
+                    # Check for building collision here
+                    # if road.as_2D() in self.construction_coordinates:
+                    #     continue
+
+                # Equalize here
+                # x, y, z = (road.with_points(y=int(self.roads_y[road]) + shift))
+
+                #  Filter conditions
+                # if road.as_2D() in self.construction_coordinates:
+                #     if not self.get_block_at(x, y, z).is_one_of(('air', 'grass', 'snow', 'sand', 'stone')):
+                #         continue
+
+                block_str = random.choices(list(chose_pattern[key].keys()),
+                                            k=1, weights=list(chose_pattern[key].values()))[0]
+                the_blocks = Block(block_str)
+                self.editor.placeBlock(coord, the_blocks)

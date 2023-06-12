@@ -72,6 +72,9 @@ class CastleRing:
             if not self.editor.getBuildArea().contains((x, 0, z)) or (x, z) not in self.blocks:
                 continue
             base_coord = self.coord2d_to_ground_coord(x, z)
+
+            # Check for tower collision
+
             tower_heights.append(self.tower_height_fun())
             self.towers.append(Tower(base_coord, self.tower_width, tower_heights[-1], self.wall_placer_fct, self.roof_placer_fct))
 
@@ -124,7 +127,7 @@ class Castle:
                      rampart_placer_fct):
         tower_amount_factor = random.randint(5, 8)
         tower_amount_scaling = random.random() / 2 + 0.5
-        tower_amounts = [max(3, int(tower_amount_factor * i * tower_amount_scaling)) for i in range(1, self.ring_amount + 1)]
+        tower_amounts = [max(5, int(tower_amount_factor * i * tower_amount_scaling)) for i in range(1, self.ring_amount + 1)]
 
         tower_amount_fun = lambda i: tower_amounts[i]
 
@@ -143,7 +146,7 @@ class Castle:
         def variation_clamped_around(_min, _max, around, var):
             return random.randint(max(_min, around - var), min(around + var, _max))
 
-        tower_width_generator = lambda: random.randint(3, 15)
+        tower_width_generator = lambda: random.randint(5, 15)
         wall_height_fun = lambda t_height: variation_clamped_around(min_height - 2, t_height, int(t_height / 2), 5)
         wall_width_fun = lambda t_width: variation_clamped_around(2, t_width, int(t_width / 2), 3)
 

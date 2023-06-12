@@ -85,7 +85,22 @@ def main():
                        get_rampart_function())
         return c
 
+    def house_builder(center, radius):
+        x, y, z = center
+        geometry.placeBoxHollow(editor, Box((x - radius, y, z - radius), (radius * 2, radius * 2, radius * 2)), Block('oak_planks'))
+
     territory.build_territories(placement_map, batiment_builder)
+    house_amount = 100
+    for i in range(house_amount):
+        house_radius = random.randint(3, 6)
+        try:
+            x, z = placement_map.get_build_coordinates_2d(house_radius)
+        except NoValidPositionException:
+            continue
+
+        house_builder(placement_map.coord2d_to_ground_coord(x, z), house_radius)
+        placement_map.occupy_area(*placement_map.coord_absolute_to_relative(x, z), 1, house_radius)
+
     editor.flushBuffer()
     exit(0)
 
@@ -95,7 +110,7 @@ def main():
 
         print(f"Castle size : {castle_radius}")
         try:
-            x, z = placement_map.get_build_coordinates_2d(castle_radius)
+            x, z = placement_map.get_build_coordinates_2d(castle_radius, sampling=1)
         except NoValidPositionException:
             print(f"Retrying with smaller castle")
             castle_radius -= 7

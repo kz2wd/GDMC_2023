@@ -54,4 +54,8 @@ def generate_roads_around(placement_map, castle, center, radius, road_amount):
         return
     for point in placement_map.random_point_on_map(road_amount, center, radius, road_amount):
         placement_map.compute_roads(coord3d_list_to_2d(castle.rings[-1].gates), point)
+        road_pattern = {"INNER": {"stone": 1.0},
+                        "MIDDLE": {"stone": 1.0},
+                        "OUTER": {"stone": 1.0}}
+        placement_map.build_roads(road_pattern)
 
