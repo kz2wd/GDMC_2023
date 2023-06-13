@@ -22,6 +22,10 @@ def get_norm(coord):
     return math.sqrt(sum(map(lambda x: x*x, coord)))
 
 
+def get_distance(coord1, coord2):
+    return get_norm(coords_sub(coord2, coord1))
+
+
 def coord_scalar_op(coord, scalar):
     return lambda op: tuple(map(lambda u: op(u, scalar), coord))
 

@@ -27,6 +27,11 @@ class PlacementMap:
         self.height_map = self.sample_array2d(self.__get_heightmap_no_trees(),
                                               self.default_precision)
         self.occupation_map = np.ones_like(self.height_map)
+        # 'Occupy' water
+        for indexes in self.yield_surface_coords():
+            i, j = indexes[0], indexes[2]
+            self.occupation_map[i, j] = self.editor.worldSlice.heightmaps["MOTION_BLOCKING"][i, j] == self.editor.worldSlice.heightmaps["OCEAN_FLOOR"][i, j]
+
         self.bonus_map = np.ones_like(self.height_map, dtype=np.float64)
 
         self.graph: networkx.Graph | None = None
@@ -43,7 +48,7 @@ class PlacementMap:
 
         It is not perfect as sometimes, there can be flower or grass or other blocks between the ground and the '
         floating' logs, but it is good enough for our use"""
-        self.editor.loadWorldSlice(heightmapTypes=["MOTION_BLOCKING_NO_LEAVES"], cache=True)
+        self.editor.loadWorldSlice(cache=True)
         heightmap = self.editor.worldSlice.heightmaps["MOTION_BLOCKING_NO_LEAVES"]
 
         for x, rest in enumerate(heightmap):
@@ -347,7 +352,7 @@ class PlacementMap:
                 coordinates = increase_y(road, i)
 
                 # Check for building collision here
-                if self.build_area.contains(coordinates):
+                if self.build_area.contains(coordinates) and self.occupation_map[self.coord_absolute_to_relative(coordinates[0], coordinates[2])] == 1:
                     self.editor.placeBlock(coordinates, Block("air"))
 
         # place blocks

@@ -11,7 +11,8 @@ from glm import ivec3
 from PlacementMap import PlacementMap
 from blob_expand import blob_expand, get_borders, get_borders_from_outside
 from utils import circle_around, increase_y, get_normalized_direction, coord_scalar_mul, coords_add, \
-    perpendicular_vector, shift_on_side, coords_sub, get_norm, with_y, coord_int, coord_in_area
+    perpendicular_vector, shift_on_side, coords_sub, get_norm, with_y, coord_int, coord_in_area, get_distance, \
+    coord3d_list_to_2d
 
 
 class Tower:
@@ -23,6 +24,7 @@ class Tower:
         self.roof_fct = roof_fct
 
     def build_tower(self):
+        print(":", end="")
         self.wall_fct(geometry.cylinder(self.center, self.width, self.height, hollow=True))
 
         def roof_shape(coord, width):
@@ -39,9 +41,9 @@ class Tower:
 
 
 class CastleRing:
-    def __init__(self, center, radius, tower_amount, build_rampart, coord2d_to_ground_coord, editor, tower_height_fun,
+    def __init__(self, castle, center, radius, tower_amount, build_rampart, coord2d_to_ground_coord, editor, tower_height_fun,
                  tower_width, wall_height_fun, wall_width, wall_placer_fct, roof_placer_fct, rampart_placer_fct, placement_map):
-        self.placement_map = placement_map
+        self.placement_map: PlacementMap = placement_map
         self.rampart_placer_fct = rampart_placer_fct
         self.roof_placer_fct = roof_placer_fct
         self.wall_placer_fct = wall_placer_fct
@@ -55,15 +57,17 @@ class CastleRing:
         self.center = center
         self.radius = radius
         self.tower_amount = tower_amount
-        self.towers = []
+        self.towers: list[Tower] = []
         self.gates = []
         self.blocks = []
+        self.castle: Castle = castle
 
     def get_territory(self):
         self.blocks = set(map(lambda coord: (coord.x, coord.z), blob_expand(self.placement_map.build_area, self.placement_map.height_map, self.center, max_distance=self.radius,
                     max_rel_diff=1, max_abs_diff=15)))
 
     def build_tower_ring(self):
+        print("&", end="")
         self.get_territory()
         circle = list(get_borders_from_outside(self.blocks, self.center, self.tower_amount, self.radius))
         tower_heights = []
@@ -74,15 +78,33 @@ class CastleRing:
             base_coord = self.coord2d_to_ground_coord(x, z)
 
             # Check for tower collision
+            i, j = self.placement_map.coord_absolute_to_relative(x, z)
 
-            tower_heights.append(self.tower_height_fun())
-            self.towers.append(Tower(base_coord, self.tower_width, tower_heights[-1], self.wall_placer_fct, self.roof_placer_fct))
+            all_towers = [tower for ring in self.castle.rings for tower in ring.towers]
 
-            self.towers[-1].build_tower()
+            # get nearest tower
+            if len(all_towers) > 0:
+                min_distance, nearest_tower = min([(get_distance((tower.center[0], tower.center[2]), (x, z)), tower) for tower in all_towers], key=lambda a: a[0])
+                if min_distance <= self.tower_width + nearest_tower.width:
+                    self.towers.append(nearest_tower)
+                    tower_heights.append(nearest_tower.height)
+                    print("M", end="")
+                else:
+                    tower_heights.append(self.tower_height_fun())
+                    self.towers.append(Tower(base_coord, self.tower_width, tower_heights[-1], self.wall_placer_fct,
+                                             self.roof_placer_fct))
+                    self.towers[-1].build_tower()
+            else:
+                tower_heights.append(self.tower_height_fun())
+                self.towers.append(Tower(base_coord, self.tower_width, tower_heights[-1], self.wall_placer_fct, self.roof_placer_fct))
+                self.towers[-1].build_tower()
+
         if self.build_rampart and tower_heights:
+            print(".", end="")
             wall_height = self.wall_height_fun(min(tower_heights) + 5)
             # Place walls
-            for (x1, z1), (x2, z2) in zip(circle, circle[1:] + [circle[0]]):
+            tower_coords = coord3d_list_to_2d(map(lambda t: t.center, self.towers))
+            for (x1, z1), (x2, z2) in zip(tower_coords, tower_coords[1:] + [tower_coords[0]]):
                 if not (self.editor.getBuildArea().contains((x1, 0, z1)) and self.editor.getBuildArea().contains((x2, 0, z2))):
                     continue
                 coord1 = self.coord2d_to_ground_coord(x1, z1)
@@ -105,6 +127,7 @@ class CastleRing:
 
         self.compute_gates()
 
+
     def compute_gates(self):
         if not len(self.towers):
             return
@@ -121,20 +144,22 @@ class Castle:
         self.center = center
         self.radius = radius
         self.ring_amount = ring_amount
-        self.rings = []
+        self.rings: list[CastleRing] = []
 
     def build_castle(self, editor: Editor, coord2d_to_ground_coord, wall_placer_fct, roof_placer_fct,
                      rampart_placer_fct):
+
+        print("Building castle ", end="")
         tower_amount_factor = random.randint(5, 8)
         tower_amount_scaling = random.random() / 2 + 0.5
         tower_amounts = [max(5, int(tower_amount_factor * i * tower_amount_scaling)) for i in range(1, self.ring_amount + 1)]
 
         tower_amount_fun = lambda i: tower_amounts[i]
 
-        tower_height_downscaling = random.random() / 2 + 0.5
-        downscaling_factor = random.randint(5, 10)
+        tower_height_downscaling = random.random() / 5 + 0.6
+        downscaling_factor = random.randint(10, 20)
         tower_base_height = random.randint(30, 50)
-        tower_heights = [int(tower_base_height - (i * downscaling_factor)) for i in range(1, self.ring_amount + 1)]
+        tower_heights = [int(tower_base_height * (tower_height_downscaling ** i)) for i in range(1, self.ring_amount + 1)]
 
         min_height = 10
         max_height = tower_base_height
@@ -146,37 +171,25 @@ class Castle:
         def variation_clamped_around(_min, _max, around, var):
             return random.randint(max(_min, around - var), min(around + var, _max))
 
-        tower_width_generator = lambda: random.randint(5, 15)
+        base_width = random.randint(15, 25)
+        width_decrease = random.random() / 5 + 0.75
+        tower_widths = [int(base_width * (width_decrease ** i)) for i in
+                         range(1, self.ring_amount + 1)]
+        tower_width_generator = lambda i: variation_clamped_around(5, 25, tower_widths[i], 0)
         wall_height_fun = lambda t_height: variation_clamped_around(min_height - 2, t_height, int(t_height / 2), 5)
         wall_width_fun = lambda t_width: variation_clamped_around(2, t_width, int(t_width / 2), 3)
-
-        center_tower_amount = random.randint(1, 3)
-        center_tower_width = random.randint(10, 20)
-        center_tower_height = lambda: random.randint(40, 70)
-        # Center tower
-
-        # self.build_tower_ring(False, self.center, [1, 10, 10][center_tower_amount - 1], coord2d_to_ground_coord, editor,
-        #                  center_tower_amount,
-        #                  center_tower_height, center_tower_width, wall_height_fun, wall_width_fun(center_tower_width),
-        #                  wall_placer_fct, roof_placer_fct, rampart_placer_fct)
 
         for i in range(self.ring_amount):
             ring_radius = (i + 1) * (self.radius / self.ring_amount)
 
             # Generate tower ring
-            tower_width = tower_width_generator()
-            self.rings.append(CastleRing(self.center, ring_radius, tower_amount_fun(i), True, coord2d_to_ground_coord, editor,
+            tower_width = tower_width_generator(i)
+            self.rings.append(CastleRing(self, self.center, ring_radius, tower_amount_fun(i), True, coord2d_to_ground_coord, editor,
                                          tower_height_fun_generator(i), tower_width, wall_height_fun, wall_width_fun(tower_width),
                                          wall_placer_fct, roof_placer_fct, rampart_placer_fct, self.placement_map))
             self.rings[-1].build_tower_ring()
-            # Generate habitation ring
-            # def house_wall_placer(coords):
-            #     for coord in coords:
-            #         editor.placeBlock(coord, Block("oak_log"))
-            #
-            # house_fun = house_builder_generator(10, 10, house_wall_placer, roof_placer_fct)
-            # build_habitation_ring(self.center, ring_radius, coord2d_to_ground_coord, editor, tower_amount_fun(i),
-            #                       house_fun)
+
+        print("\nCastle generation over")
 
     def __contains__(self, coord):
         return coord_in_area(coord, self.center, self.radius)

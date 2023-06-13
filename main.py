@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import random
 from typing import List, Any, Sequence
+import termcolor
 
 import gdpc
 from gdpc import Editor, Block, geometry, Box
@@ -34,14 +35,9 @@ def main():
 
     planks = [Block(wood_type + "_planks") for wood_type in ["dark_oak", "spruce", "oak", "birch"]]
 
-    editor = Editor(buffering=True, bufferLimit=64000)
-
-    # placeGradientBox(editor, Box((30, 70, 50), (10, 10, 1)), stone_gradient)
+    editor = Editor(buffering=True, bufferLimit=64000, multithreading=True)
 
     placement_map = PlacementMap(editor)
-    # placement_map.show_steep_map([Block(color + "_concrete") for color in ["black", "purple", "red", "orange", "green", "lime", "white"]], 1, 40)
-    # editor.flushBuffer()
-    # input()
 
     stone_gradiant_placer = placement_map.occupy_on_place(gradiantPlacer(editor, stone_gradient))
     planks_gradiant_placer = placement_map.occupy_on_place(gradiantPlacer(editor, planks[::-1]))
@@ -60,24 +56,6 @@ def main():
     debug_palette = [Block(color + "_concrete") for color in ["lime", "yellow", "red", "purple", "black"]][::-1]
     palette_size = len(debug_palette)
 
-    def get_associated_block(value):
-        index = int(value)
-        if index > palette_size - 1:
-            return debug_palette[palette_size - 1]
-        return debug_palette[index]
-
-    # def place_debug_hmap(score_map):
-    #     for i in range(score_map.shape[0]):
-    #         for j in range(score_map.shape[1]):
-    #             x_rel, z_rel = coord_converter(i, j)
-    #             x_abs, z_abs = coord_relative_to_absolute(x_rel, z_rel)
-    #             editor.placeBlock((x_abs, hmap[x_rel, z_rel] - 1, z_abs), get_associated_block(score_map[i, j]))
-
-    def filter_in_build(coords):
-        if not isinstance(coords, Sequence):
-            coords = [coords]
-        return filter(lambda coord: build_area.contains(coord.to_3d(0)), coords)
-
     def batiment_builder(center, radius):
         c = Castle(center, radius, random.choice([2, 3]), placement_map)
         c.build_castle(editor, placement_map.coord2d_to_ground_coord,
@@ -90,7 +68,7 @@ def main():
         geometry.placeBoxHollow(editor, Box((x - radius, y, z - radius), (radius * 2, radius * 2, radius * 2)), Block('oak_planks'))
 
     territory.build_territories(placement_map, batiment_builder)
-    house_amount = 100
+    house_amount = 0
     for i in range(house_amount):
         house_radius = random.randint(3, 6)
         try:
@@ -103,41 +81,6 @@ def main():
 
     editor.flushBuffer()
     exit(0)
-
-    try_amount = 3
-    castle_radius = random.randint(40, 60)
-    for i in range(try_amount):
-
-        print(f"Castle size : {castle_radius}")
-        try:
-            x, z = placement_map.get_build_coordinates_2d(castle_radius, sampling=1)
-        except NoValidPositionException:
-            print(f"Retrying with smaller castle")
-            castle_radius -= 7
-            continue
-
-        print(f"Found Building coordinate ({x}, {z}).")
-
-        build_castle(editor, (x, z), placement_map.coord2d_to_ground_coord, stone_gradiant_placer,
-                     planks_gradiant_placer,
-                     get_rampart_function(), castle_radius=castle_radius, ring_amount=random.choice([2, 3]))
-        editor.flushBuffer()
-
-    # place_debug_hmap(normalize_2d_array_sum(height_score * centerness_score * flatness_score, palette_size + 1))
-
-    # ground = editor.worldSlice.heightmaps["WORLD_SURFACE"][build_area.center[0] - build_area.begin[0],
-    #                                                        build_area.center[2] - build_area.begin[2]]
-    #
-    # ground_pos = build_area.center.to_list()
-    # ground_pos[1] = ground
-    # print(build_area.center)
-    #
-    # ground_pos = ivec3(*ground_pos)
-    # print(ground_pos)
-    #
-    # placeGradient(editor, geometry.line3D(ground_pos, build_area.center, 3),
-    #               ground,
-    #               distance(ground_pos, build_area.center), stone_gradient)
 
 
 if __name__ == '__main__':
