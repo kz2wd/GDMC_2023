@@ -57,7 +57,7 @@ def main():
     palette_size = len(debug_palette)
 
     def batiment_builder(center, radius):
-        c = Castle(center, radius, random.choice([2, 3]), placement_map)
+        c = Castle(center, radius, 7, placement_map)
         c.build_castle(editor, placement_map.coord2d_to_ground_coord,
                        stone_gradiant_placer, planks_gradiant_placer,
                        get_rampart_function())
@@ -68,29 +68,14 @@ def main():
         geometry.placeBoxHollow(editor, Box((x - radius, y, z - radius), (radius * 2, radius * 2, radius * 2)), Block('oak_planks'))
 
     territory.build_territories(placement_map, batiment_builder)
-    house_amount = 0
-    for i in range(house_amount):
-        house_radius = random.randint(3, 6)
-        try:
-            x, z = placement_map.get_build_coordinates_2d(house_radius)
-        except NoValidPositionException:
-            continue
-
-        house_builder(placement_map.coord2d_to_ground_coord(x, z), house_radius)
-        placement_map.occupy_area(*placement_map.coord_absolute_to_relative(x, z), 1, house_radius)
 
     editor.flushBuffer()
-    exit(0)
+    print("It may seems as nothing is happening but the editor is surely placing blocks")
+    print("Wait a bit or kill the process if it last too long")
 
 
 if __name__ == '__main__':
     main()
-    exit(0)
+    print("Generation over, thank you for using this castle generator.")
 
-    with cProfile.Profile() as pr:
-        main()
 
-    stats = pstats.Stats(pr)
-    stats.sort_stats(pstats.SortKey.TIME)
-    stats.print_stats()
-    stats.dump_stats(filename='profiler.prof')

@@ -175,7 +175,7 @@ class Castle:
         width_decrease = random.random() / 5 + 0.75
         tower_widths = [int(base_width * (width_decrease ** i)) for i in
                          range(1, self.ring_amount + 1)]
-        tower_width_generator = lambda i: variation_clamped_around(5, 25, tower_widths[i], 0)
+        tower_width_generator = lambda i: variation_clamped_around(5, 25, tower_widths[i], 1)
         wall_height_fun = lambda t_height: variation_clamped_around(min_height - 2, t_height, int(t_height / 2), 5)
         wall_width_fun = lambda t_width: variation_clamped_around(2, t_width, int(t_width / 2), 3)
 
@@ -189,6 +189,7 @@ class Castle:
                                          wall_placer_fct, roof_placer_fct, rampart_placer_fct, self.placement_map))
             self.rings[-1].build_tower_ring()
 
+        self.placement_map.editor.flushBuffer()
         print("\nCastle generation over")
 
     def __contains__(self, coord):

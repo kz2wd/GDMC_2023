@@ -325,6 +325,8 @@ class PlacementMap:
             tries += 1
 
     def __add_road_block(self, road_coord, placement: str):
+        if not self.build_area.contains((road_coord[0], 0, road_coord[1])):
+            return
 
         delete = False
         for key in self.roads_infos:

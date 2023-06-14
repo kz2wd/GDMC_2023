@@ -59,12 +59,16 @@ def build_territories(placement_map: PlacementMap, batiment_builder):
 
 def generate_roads_around(placement_map, castle, center, radius, road_amount):
     print("Generating roads around the build area")
+    print("This step can last a while as it scale badly with build area size")
+    print("Terminate the program if it last too long")
     if not castle.rings[-1].gates:
         return
     for point in placement_map.random_point_on_map(road_amount, center, radius, road_amount):
+        print("_", end="")
         placement_map.compute_roads(coord3d_list_to_2d(castle.rings[-1].gates), point)
         road_pattern = {"INNER": {"stone": 1.0},
                         "MIDDLE": {"stone": 1.0},
                         "OUTER": {"stone": 1.0}}
         placement_map.build_roads(road_pattern)
-
+        placement_map.editor.flushBuffer()
+    print("Road generation over")
