@@ -1,27 +1,12 @@
 from __future__ import annotations
 
-import math
 import random
-from typing import List, Any, Sequence
-import termcolor
 
-import gdpc
 from gdpc import Editor, Block, geometry, Box
-from gdpc.block import transformedBlockOrPalette
-from gdpc.geometry import placeLine
-from gdpc.vector_tools import distance, X, Z, circle, ellipse
-from glm import ivec3, ivec2
-
-import cProfile
-import pstats
-
-import numpy as np
 
 import territory
-from PlacementMap import PlacementMap, NoValidPositionException
-from blob_expand import CoordExplore
-from castle_geo import placeGradientBox, placeGradient, gradiantPlacer, Castle
-from utils import shift_on_side, coord_normalize
+from PlacementMap import PlacementMap
+from castle_geo import gradiantPlacer, Castle
 
 
 def main():

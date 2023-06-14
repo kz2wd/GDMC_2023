@@ -6,7 +6,7 @@ import networkx as nx
 import numpy as np
 from gdpc import Editor, Block
 
-from utils import increase_y, coord_in_area, with_y
+from utils import increase_y, coord_in_area
 
 
 class NoValidPositionException(Exception):

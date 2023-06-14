@@ -1,8 +1,5 @@
-import random
-
 from gdpc import Block
 
-import castle_geo
 from PlacementMap import PlacementMap, NoValidPositionException
 from blob_expand import blob_expand, CoordExplore
 from utils import coord3d_list_to_2d

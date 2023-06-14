@@ -1,17 +1,12 @@
 import math
 import random
-import numpy as np
-import time
-from typing import Union
 
 from gdpc import Editor, Box, Block, geometry
-from gdpc.vector_tools import l1Norm
-from glm import ivec3
 
 from PlacementMap import PlacementMap
-from blob_expand import blob_expand, get_borders, get_borders_from_outside
-from utils import circle_around, increase_y, get_normalized_direction, coord_scalar_mul, coords_add, \
-    perpendicular_vector, shift_on_side, coords_sub, get_norm, with_y, coord_int, coord_in_area, get_distance, \
+from blob_expand import blob_expand, get_borders_from_outside
+from utils import circle_around, increase_y, coord_scalar_mul, coords_add, \
+    coords_sub, coord_int, coord_in_area, get_distance, \
     coord3d_list_to_2d
 
 
@@ -169,7 +164,10 @@ class Castle:
             max(min_height, min(tower_heights[i] + tower_height_variation, max_height)))
 
         def variation_clamped_around(_min, _max, around, var):
-            return random.randint(max(_min, around - var), min(around + var, _max))
+            try:
+                return random.randint(max(_min, around - var), min(around + var, _max))
+            except ValueError:
+                return around
 
         base_width = random.randint(15, 25)
         width_decrease = random.random() / 5 + 0.75

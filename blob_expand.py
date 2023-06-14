@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import math
-from typing import Any
 import random
-
-from gdpc import editor
+from typing import Any
 
 
 class CoordExplore:
