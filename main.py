@@ -76,6 +76,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-    print("Generation over, thank you for using this castle generator.")
+    print("Generation about to end, thank you for using this castle generator.")
 
 
